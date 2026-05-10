@@ -1,0 +1,9 @@
+{
+  "max_lines": 500,
+  "roots": [
+    "beep",
+    "tests",
+    "tools/ci"
+  ],
+  "allowed_oversized": {}
+}

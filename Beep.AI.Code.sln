@@ -1,0 +1,32 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{07C2787E-EAC7-C090-1BA3-A61EC2A24D84}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Beep.CSharpAnalyzer", "Beep.CSharpAnalyzer", "{DFAEFAED-CF67-3A8A-185D-ED8415C333C9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Beep.CSharpAnalyzer", "tools\Beep.CSharpAnalyzer\Beep.CSharpAnalyzer\Beep.CSharpAnalyzer.csproj", "{15A1A057-70B1-5EDE-7ED2-2E619775A2ED}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{15A1A057-70B1-5EDE-7ED2-2E619775A2ED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{15A1A057-70B1-5EDE-7ED2-2E619775A2ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{15A1A057-70B1-5EDE-7ED2-2E619775A2ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{15A1A057-70B1-5EDE-7ED2-2E619775A2ED}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{DFAEFAED-CF67-3A8A-185D-ED8415C333C9} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
+		{15A1A057-70B1-5EDE-7ED2-2E619775A2ED} = {DFAEFAED-CF67-3A8A-185D-ED8415C333C9}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F921FBB0-C11B-42DF-AAE9-E2BCE325AB9F}
+	EndGlobalSection
+EndGlobal

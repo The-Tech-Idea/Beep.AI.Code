@@ -1,0 +1,4 @@
+{"timestamp": "2026-05-05T02:53:05.621116+00:00", "role": "meta", "kind": "session_history_schema", "schema_version": 1}
+{"timestamp": "2026-05-05T02:53:05.620497+00:00", "role": "system", "content": "sys"}
+{"timestamp": "2026-05-05T02:53:05.620497+00:00", "role": "user", "content": "src-u"}
+{"timestamp": "2026-05-05T02:53:05.620497+00:00", "role": "assistant", "content": "src-a"}

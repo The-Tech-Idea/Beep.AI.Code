@@ -1,0 +1,610 @@
+The agent can **use the LLM for general coding knowledge**, but real multi-language support should **not depend only on the LLM**.
+
+The best design is:
+
+```text
+LLM = reasoning + code understanding + code generation
+Agent framework = language detection + tools + build/test commands + parsers + rules
+```
+
+So yes, the LLM helps, but your agent needs a **language support layer**.
+
+---
+
+# 1. What the LLM handles
+
+The LLM can usually understand many languages:
+
+```text
+Python
+C#
+JavaScript / TypeScript
+Java
+Go
+Rust
+PHP
+C++
+SQL
+HTML/CSS
+Blazor/Razor
+```
+
+It can:
+
+```text
+read code
+explain code
+suggest fixes
+write new code
+refactor code
+generate tests
+```
+
+But the LLM alone does **not reliably know**:
+
+```text
+how to build this specific project
+which test framework is used
+where tests are located
+which files are generated
+which package manager is active
+which language version is configured
+which commands are safe to run
+```
+
+That is your agent’s job.
+
+---
+
+# 2. What your agent must implement
+
+You need a **Language Adapter** system.
+
+Example:
+
+```text
+beep/languages/
+  base.py
+  python.py
+  csharp.py
+  javascript.py
+  typescript.py
+  java.py
+  go.py
+  rust.py
+```
+
+Each adapter knows how to work with that language.
+
+Example base interface:
+
+```python
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass
+class ProjectCommand:
+    name: str
+    command: list[str]
+    description: str
+
+
+class LanguageAdapter(ABC):
+    name: str
+    extensions: list[str]
+
+    @abstractmethod
+    def detect(self, root_path: str) -> bool:
+        pass
+
+    @abstractmethod
+    def get_build_commands(self, root_path: str) -> list[ProjectCommand]:
+        pass
+
+    @abstractmethod
+    def get_test_commands(self, root_path: str) -> list[ProjectCommand]:
+        pass
+
+    @abstractmethod
+    def get_lint_commands(self, root_path: str) -> list[ProjectCommand]:
+        pass
+
+    @abstractmethod
+    def find_test_files(self, source_file: str, root_path: str) -> list[str]:
+        pass
+```
+
+---
+
+# 3. Example: Python adapter
+
+```python
+from pathlib import Path
+
+
+class PythonAdapter(LanguageAdapter):
+    name = "python"
+    extensions = [".py"]
+
+    def detect(self, root_path: str) -> bool:
+        root = Path(root_path)
+        return any([
+            (root / "pyproject.toml").exists(),
+            (root / "requirements.txt").exists(),
+            (root / "setup.py").exists(),
+            (root / "pytest.ini").exists(),
+        ])
+
+    def get_build_commands(self, root_path: str) -> list[ProjectCommand]:
+        return []
+
+    def get_test_commands(self, root_path: str) -> list[ProjectCommand]:
+        root = Path(root_path)
+
+        if (root / "pytest.ini").exists() or (root / "tests").exists():
+            return [
+                ProjectCommand(
+                    name="pytest",
+                    command=["pytest"],
+                    description="Run Python tests with pytest"
+                )
+            ]
+
+        return [
+            ProjectCommand(
+                name="python-unittest",
+                command=["python", "-m", "unittest", "discover"],
+                description="Run Python unittest discovery"
+            )
+        ]
+
+    def get_lint_commands(self, root_path: str) -> list[ProjectCommand]:
+        root = Path(root_path)
+
+        if (root / "pyproject.toml").exists():
+            return [
+                ProjectCommand(
+                    name="ruff",
+                    command=["ruff", "check", "."],
+                    description="Run Ruff linter"
+                )
+            ]
+
+        return []
+
+    def find_test_files(self, source_file: str, root_path: str) -> list[str]:
+        source = Path(source_file)
+        root = Path(root_path)
+
+        candidates = [
+            root / "tests" / f"test_{source.name}",
+            root / "tests" / source.name.replace(".py", "_test.py"),
+            source.with_name(f"test_{source.name}"),
+            source.with_name(source.name.replace(".py", "_test.py")),
+        ]
+
+        return [str(path) for path in candidates if path.exists()]
+```
+
+---
+
+# 4. Example: C# adapter
+
+```python
+from pathlib import Path
+
+
+class CSharpAdapter(LanguageAdapter):
+    name = "csharp"
+    extensions = [".cs", ".csproj", ".sln", ".razor"]
+
+    def detect(self, root_path: str) -> bool:
+        root = Path(root_path)
+        return bool(
+            list(root.glob("*.sln")) or
+            list(root.rglob("*.csproj"))
+        )
+
+    def get_build_commands(self, root_path: str) -> list[ProjectCommand]:
+        root = Path(root_path)
+
+        solution_files = list(root.glob("*.sln"))
+        if solution_files:
+            return [
+                ProjectCommand(
+                    name="dotnet-build",
+                    command=["dotnet", "build", str(solution_files[0])],
+                    description="Build .NET solution"
+                )
+            ]
+
+        return [
+            ProjectCommand(
+                name="dotnet-build",
+                command=["dotnet", "build"],
+                description="Build .NET project"
+            )
+        ]
+
+    def get_test_commands(self, root_path: str) -> list[ProjectCommand]:
+        return [
+            ProjectCommand(
+                name="dotnet-test",
+                command=["dotnet", "test"],
+                description="Run .NET tests"
+            )
+        ]
+
+    def get_lint_commands(self, root_path: str) -> list[ProjectCommand]:
+        return [
+            ProjectCommand(
+                name="dotnet-format",
+                command=["dotnet", "format", "--verify-no-changes"],
+                description="Check .NET formatting"
+            )
+        ]
+
+    def find_test_files(self, source_file: str, root_path: str) -> list[str]:
+        root = Path(root_path)
+        source_name = Path(source_file).stem
+
+        candidates = []
+        for file in root.rglob("*.cs"):
+            if source_name in file.stem and ("Test" in file.stem or "Tests" in str(file)):
+                candidates.append(str(file))
+
+        return candidates
+```
+
+---
+
+# 5. Language detection should be automatic
+
+Your agent should scan the repo and detect languages.
+
+Example:
+
+```python
+class LanguageRegistry:
+    def __init__(self, adapters: list[LanguageAdapter]):
+        self.adapters = adapters
+
+    def detect_languages(self, root_path: str) -> list[LanguageAdapter]:
+        detected = []
+
+        for adapter in self.adapters:
+            if adapter.detect(root_path):
+                detected.append(adapter)
+
+        return detected
+```
+
+Usage:
+
+```python
+registry = LanguageRegistry([
+    PythonAdapter(),
+    CSharpAdapter(),
+    JavaScriptAdapter(),
+    TypeScriptAdapter(),
+    JavaAdapter(),
+    GoAdapter(),
+    RustAdapter(),
+])
+
+languages = registry.detect_languages(project_root)
+```
+
+Then inject this into the agent prompt:
+
+```text
+Detected project languages:
+- Python
+- C#
+
+Available validation commands:
+- pytest
+- dotnet build
+- dotnet test
+```
+
+---
+
+# 6. You also need project-type detection
+
+Language is not enough.
+
+For example, JavaScript could be:
+
+```text
+React
+Next.js
+Vue
+Angular
+Node API
+Electron
+Vite
+```
+
+C# could be:
+
+```text
+Console app
+ASP.NET Core
+Blazor
+WinForms
+WPF
+MAUI
+Class library
+Test project
+```
+
+Python could be:
+
+```text
+CLI app
+FastAPI
+Django
+Flask
+Package/library
+ML project
+Automation script
+```
+
+So add a second layer:
+
+```text
+Language Adapter
+  → Framework Detector
+  → Build/Test/Lint Command Resolver
+```
+
+Example:
+
+```python
+@dataclass
+class ProjectProfile:
+    languages: list[str]
+    frameworks: list[str]
+    package_managers: list[str]
+    build_commands: list[ProjectCommand]
+    test_commands: list[ProjectCommand]
+    lint_commands: list[ProjectCommand]
+```
+
+---
+
+# 7. Multi-language project example
+
+Suppose a repo has:
+
+```text
+backend/
+  pyproject.toml
+  app/
+
+frontend/
+  package.json
+  src/
+
+desktop/
+  MyApp.sln
+```
+
+Your agent should detect:
+
+```text
+Python backend
+Node/React frontend
+C#/.NET desktop app
+```
+
+Then commands become scoped:
+
+```text
+Backend:
+  cd backend && pytest
+
+Frontend:
+  cd frontend && npm test
+  cd frontend && npm run build
+
+Desktop:
+  cd desktop && dotnet build
+  cd desktop && dotnet test
+```
+
+So your command model should include `cwd`:
+
+```python
+@dataclass
+class ProjectCommand:
+    name: str
+    command: list[str]
+    cwd: str
+    description: str
+```
+
+---
+
+# 8. The LLM should choose from known commands, not guess blindly
+
+Bad design:
+
+```text
+LLM decides to run random command
+```
+
+Better design:
+
+```text
+Agent detects commands
+LLM chooses from approved commands
+Agent validates command safety
+Then runs it
+```
+
+Example prompt injection:
+
+```text
+Available project commands:
+
+1. pytest
+   cwd: backend
+   command: pytest
+
+2. npm test
+   cwd: frontend
+   command: npm test
+
+3. dotnet build
+   cwd: desktop
+   command: dotnet build
+```
+
+Then the LLM can choose intelligently.
+
+---
+
+# 9. Add language-specific error parsers
+
+This is very important.
+
+For Python:
+
+```text
+File "x.py", line 12
+ModuleNotFoundError
+AssertionError
+SyntaxError
+```
+
+For C#:
+
+```text
+Program.cs(10,25): error CS1002
+error CS0246
+error CS0103
+```
+
+For TypeScript:
+
+```text
+TS2304
+TS2322
+TS2345
+```
+
+Create:
+
+```text
+beep/errors/parsers/
+  python.py
+  csharp.py
+  typescript.py
+  javascript.py
+```
+
+Example C# parser:
+
+```python
+import re
+from dataclasses import dataclass
+
+
+@dataclass
+class ParsedError:
+    file: str | None
+    line: int | None
+    column: int | None
+    code: str | None
+    message: str
+
+
+CSHARP_ERROR_RE = re.compile(
+    r"(?P<file>.+\.cs)\((?P<line>\d+),(?P<column>\d+)\): "
+    r"error (?P<code>CS\d+): (?P<message>.+)"
+)
+
+
+def parse_csharp_errors(output: str) -> list[ParsedError]:
+    errors = []
+
+    for line in output.splitlines():
+        match = CSHARP_ERROR_RE.search(line)
+        if match:
+            errors.append(
+                ParsedError(
+                    file=match.group("file"),
+                    line=int(match.group("line")),
+                    column=int(match.group("column")),
+                    code=match.group("code"),
+                    message=match.group("message"),
+                )
+            )
+
+    return errors
+```
+
+This lets your agent say:
+
+```text
+The build failed in Program.cs line 10 because CS0246 means the type or namespace could not be found.
+```
+
+Instead of dumping raw output.
+
+---
+
+# 10. Final answer to your question
+
+The agent should support multiple programming languages through **both**:
+
+```text
+1. LLM intelligence
+2. Language-specific adapters in your agent
+```
+
+The LLM gives the reasoning.
+Your Python framework gives the structure.
+
+The correct architecture is:
+
+```text
+Agent Core
+  ├── LLM Provider
+  ├── Tool System / MCP
+  ├── Context Manager
+  ├── Language Registry
+  │     ├── PythonAdapter
+  │     ├── CSharpAdapter
+  │     ├── JavaScriptAdapter
+  │     ├── TypeScriptAdapter
+  │     ├── JavaAdapter
+  │     ├── GoAdapter
+  │     └── RustAdapter
+  ├── Framework Detectors
+  ├── Test Runner
+  ├── Error Parsers
+  ├── Edit Transaction System
+  └── Validation Policy
+```
+
+So the answer is:
+
+**The coding knowledge is mostly from the LLM, but professional multi-language support must be implemented in your agent through adapters, detectors, command resolvers, test runners, and error parsers.**
+
+For your project, I would add this next:
+
+```text
+beep/languages/
+  base.py
+  registry.py
+  python.py
+  csharp.py
+  javascript.py
+  typescript.py
+```
+
+Start with **Python + C# + JavaScript/TypeScript**. That will cover most real-world projects and also match your .NET background.

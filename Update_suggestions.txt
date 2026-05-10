@@ -1,0 +1,916 @@
+Got it — since your agent is in **Python**, your current status is actually strong. You already have the basic “coding agent shell”:
+
+```text
+Prompt ✅
+MCP/tools ✅
+Tool feedback partial ✅
+Testing partial ✅
+Memory partial ✅
+Semantic search partial ✅
+```
+
+What you need next is the **engineering reliability layer**. Claude Code/Codex-style agents are not powerful only because of the model. They are powerful because they have:
+
+```text
+context selection + tool execution + safe editing + validation + retry + memory + evaluations
+```
+
+Here is what I would implement next, in priority order.
+
+---
+
+# 1. Harden the agent loop first
+
+Do this before vector DB, test generation, or fancy subagents.
+
+Your loop should look like this:
+
+```text
+User task
+→ classify task
+→ inspect repo
+→ select context
+→ plan
+→ execute tool
+→ inject structured result/error
+→ repair
+→ validate
+→ summarize diff
+```
+
+You likely already have something like this, but you need to make the loop more explicit.
+
+Suggested files:
+
+```text
+beep/
+  agent/
+    loop.py
+    state.py
+    planner.py
+    executor.py
+    validator.py
+    retry_policy.py
+```
+
+Core state model:
+
+```python
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
+
+
+class AgentPhase(str, Enum):
+    UNDERSTAND = "understand"
+    CONTEXT = "context"
+    PLAN = "plan"
+    EXECUTE = "execute"
+    VALIDATE = "validate"
+    REPAIR = "repair"
+    FINAL = "final"
+
+
+@dataclass
+class AgentState:
+    task: str
+    phase: AgentPhase = AgentPhase.UNDERSTAND
+    steps: list[dict[str, Any]] = field(default_factory=list)
+    failures: list[dict[str, Any]] = field(default_factory=list)
+    changed_files: set[str] = field(default_factory=set)
+    test_results: list[dict[str, Any]] = field(default_factory=list)
+    build_results: list[dict[str, Any]] = field(default_factory=list)
+    max_iterations: int = 25
+    iteration: int = 0
+
+    def add_step(self, kind: str, data: dict[str, Any]) -> None:
+        self.steps.append({"kind": kind, "data": data})
+
+    def add_failure(self, failure: dict[str, Any]) -> None:
+        self.failures.append(failure)
+```
+
+Your current anti-loop guards are good, but you need **phase-aware control**. For example:
+
+```text
+If editing happened → validation is mandatory.
+If tests fail → repair phase is mandatory.
+If same command fails twice → inject diagnosis request.
+If no file changed after N edit attempts → force re-plan.
+```
+
+---
+
+# 2. Implement structured tool-error injection
+
+This is one of the most important missing pieces.
+
+Right now you have tool results, shell exit codes, and feedback. Good. But the model needs errors in a normalized format.
+
+Create this:
+
+```text
+beep/errors/
+  models.py
+  classifier.py
+  injector.py
+```
+
+Example:
+
+```python
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class StructuredToolError:
+    tool_name: str
+    error_type: str
+    message: str
+    command: Optional[str] = None
+    file_path: Optional[str] = None
+    line: Optional[int] = None
+    column: Optional[int] = None
+    exit_code: Optional[int] = None
+    stdout: Optional[str] = None
+    stderr: Optional[str] = None
+    retryable: bool = True
+    suggested_action: Optional[str] = None
+```
+
+Use categories like:
+
+```text
+BuildError
+TestFailure
+CommandTimeout
+PermissionDenied
+FileNotFound
+InvalidPatch
+McpToolError
+MissingDependency
+SyntaxError
+RuntimeError
+UnknownTool
+RepeatedFailure
+```
+
+Then inject it into the next model message like this:
+
+```xml
+<tool_error>
+  <tool>shell</tool>
+  <error_type>BuildError</error_type>
+  <command>dotnet build</command>
+  <exit_code>1</exit_code>
+  <stderr>...</stderr>
+  <suggested_action>Fix the compile error before continuing.</suggested_action>
+</tool_error>
+```
+
+This is much better than only giving raw stderr.
+
+---
+
+# 3. Add an edit transaction system
+
+Your agent should not just write files. It should edit through a transaction layer.
+
+Suggested files:
+
+```text
+beep/editing/
+  patcher.py
+  transaction.py
+  diff.py
+  rollback.py
+```
+
+You need this behavior:
+
+```text
+Before edit:
+  snapshot file
+
+Apply edit:
+  patch or full rewrite
+
+After edit:
+  generate diff
+  record changed file
+
+If validation fails badly:
+  allow rollback
+
+Final:
+  show changed files and summary
+```
+
+Example:
+
+```python
+from dataclasses import dataclass
+from pathlib import Path
+
+
+@dataclass
+class FileSnapshot:
+    path: Path
+    original: str
+
+
+class EditTransaction:
+    def __init__(self) -> None:
+        self.snapshots: dict[Path, FileSnapshot] = {}
+        self.changed_files: set[Path] = set()
+
+    def snapshot(self, path: Path) -> None:
+        if path not in self.snapshots and path.exists():
+            self.snapshots[path] = FileSnapshot(path=path, original=path.read_text(encoding="utf-8"))
+
+    def write_text(self, path: Path, content: str) -> None:
+        self.snapshot(path)
+        path.write_text(content, encoding="utf-8")
+        self.changed_files.add(path)
+
+    def rollback(self) -> None:
+        for snapshot in self.snapshots.values():
+            snapshot.path.write_text(snapshot.original, encoding="utf-8")
+```
+
+This is a big quality upgrade.
+
+---
+
+# 4. Add a real context manager
+
+This is probably your biggest future differentiator.
+
+Right now you have semantic search via Semble. That is useful, but a coding agent needs **hybrid context**, not only vector search.
+
+Implement:
+
+```text
+beep/context/
+  manager.py
+  repo_map.py
+  symbol_index.py
+  file_ranker.py
+  context_budget.py
+  dependency_graph.py
+```
+
+Your context manager should combine:
+
+```text
+1. User-mentioned files
+2. Recently edited files
+3. Semantic search results
+4. Text search results
+5. Symbol references
+6. Import/dependency graph
+7. Test files related to source files
+8. Project rules from .beep.md
+```
+
+For Python codebases, use:
+
+```text
+ast
+tree-sitter
+ripgrep
+import graph
+pytest discovery
+```
+
+For C#/.NET projects, you can later add Roslyn through external tooling, but for your Python agent core, keep the context manager language-agnostic.
+
+A useful ranking model:
+
+```python
+@dataclass
+class ContextCandidate:
+    path: str
+    score: float
+    reason: str
+    source: str
+```
+
+Example scoring:
+
+```text
++100 explicitly mentioned by user
++80 recently changed by agent
++70 contains symbol name
++60 semantic match
++50 imported by target file
++40 test file for target file
+-100 ignored/generated/vendor file
+```
+
+This is more important than adding Chroma/Qdrant immediately.
+
+---
+
+# 5. Add automatic test generation as a dedicated capability
+
+You are correct: the agent can manually write tests today, but a good coding agent should have a **test-generation workflow**.
+
+Do not implement it as just another prompt. Implement it as a workflow/tool.
+
+Suggested files:
+
+```text
+beep/testing/
+  generator.py
+  planner.py
+  coverage.py
+  test_file_locator.py
+```
+
+Tool idea:
+
+```python
+@dataclass
+class GenerateTestsRequest:
+    target_files: list[str]
+    framework: str | None = None
+    behavior_description: str | None = None
+    max_tests: int = 5
+
+
+@dataclass
+class GenerateTestsResult:
+    test_files: list[str]
+    created_files: list[str]
+    updated_files: list[str]
+    command_to_run: str
+```
+
+Workflow:
+
+```text
+Find target source file
+Find existing test style
+Detect framework
+Generate tests
+Run tests
+If tests fail because test is wrong → repair test
+If tests reveal bug → ask/continue based on task
+```
+
+Important: generated tests should follow existing project style. The agent should first inspect:
+
+```text
+tests/
+test_*.py
+*_test.py
+conftest.py
+pytest.ini
+package.json
+jest.config.*
+vitest.config.*
+```
+
+For Python projects:
+
+```text
+pytest
+unittest
+hypothesis optional later
+```
+
+For JS:
+
+```text
+jest
+vitest
+playwright
+```
+
+For .NET:
+
+```text
+xUnit
+NUnit
+MSTest
+```
+
+---
+
+# 6. Add persistent memory, but split it into layers
+
+Do not make one giant memory bucket. Use layers.
+
+Suggested structure:
+
+```text
+.beep/
+  memory/
+    project.md
+    decisions.md
+    conventions.md
+    commands.md
+    failures.md
+    skills.md
+    vector/
+```
+
+Memory layers:
+
+```text
+Session memory
+  Current task only
+
+Project memory
+  .beep.md / .beep/memory/*.md
+
+Repo memory
+  indexed files, symbols, dependency graph
+
+User memory
+  coding preferences, style preferences
+
+Failure memory
+  known broken commands, previous fixes
+
+Skill memory
+  reusable workflows
+```
+
+Example `commands.md`:
+
+````md
+# Project Commands
+
+## Build
+
+```bash
+uv run pytest
+````
+
+## Lint
+
+```bash
+ruff check .
+```
+
+## Type Check
+
+```bash
+mypy .
+```
+
+````
+
+Example `conventions.md`:
+
+```md
+# Project Conventions
+
+- Use async functions for MCP calls.
+- Return ToolResult from all tools.
+- Do not raise raw exceptions from tool adapters.
+- Keep prompts in beep/chat/prompts.py.
+````
+
+Your vector DB can come later. First, make persistent markdown memory reliable and human-editable.
+
+---
+
+# 7. Add a sandbox and permission policy
+
+If your agent can run shell commands and edit files, you need a real policy layer.
+
+Suggested files:
+
+```text
+beep/security/
+  policy.py
+  sandbox.py
+  approvals.py
+  command_guard.py
+  path_guard.py
+```
+
+Minimum policy:
+
+```python
+from dataclasses import dataclass, field
+
+
+@dataclass
+class PermissionPolicy:
+    allow_file_write: bool = True
+    allow_shell: bool = True
+    allow_network: bool = False
+    require_approval_for_shell: bool = False
+    require_approval_for_destructive: bool = True
+    protected_paths: list[str] = field(default_factory=lambda: [
+        ".git",
+        ".env",
+        "secrets.json",
+        "id_rsa",
+        "id_ed25519",
+        "node_modules",
+        ".venv",
+        "venv",
+        "__pycache__",
+    ])
+    blocked_commands: list[str] = field(default_factory=lambda: [
+        "rm -rf /",
+        "sudo",
+        "mkfs",
+        "shutdown",
+        "reboot",
+    ])
+```
+
+Before every command:
+
+```text
+Classify command risk
+Check working directory
+Check protected paths
+Check network usage
+Ask approval if needed
+Run with timeout
+Capture stdout/stderr
+Return structured result
+```
+
+---
+
+# 8. Add validation policy
+
+The agent should know when it is “done.”
+
+Add:
+
+```text
+beep/validation/
+  policy.py
+  build.py
+  tests.py
+  lint.py
+  typecheck.py
+```
+
+Validation policy should be project-specific.
+
+Example:
+
+```python
+@dataclass
+class ValidationPolicy:
+    run_tests_after_edit: bool = True
+    run_lint_after_edit: bool = False
+    run_typecheck_after_edit: bool = False
+    max_repair_attempts: int = 3
+    required_commands: list[str] = None
+```
+
+The agent should infer common commands:
+
+```text
+Python:
+  pytest
+  ruff check .
+  mypy .
+
+Node:
+  npm test
+  npm run build
+  npm run lint
+
+.NET:
+  dotnet build
+  dotnet test
+
+Rust:
+  cargo test
+  cargo clippy
+
+Go:
+  go test ./...
+```
+
+Final answer should say:
+
+```text
+Changed files:
+- x
+- y
+
+Validation:
+- pytest passed
+- lint not run because no config found
+```
+
+This makes the agent feel trustworthy.
+
+---
+
+# 9. Add an evaluation harness
+
+This is what most people skip.
+
+If you want the “best” coding agent, you need to measure it.
+
+Suggested files:
+
+```text
+beep/evals/
+  cases/
+  runner.py
+  metrics.py
+  reports.py
+```
+
+Each eval case:
+
+```yaml
+name: fix_python_import_error
+repo: samples/import_error_project
+task: "Fix the failing tests."
+success:
+  commands:
+    - "pytest"
+  changed_files_max: 3
+```
+
+Metrics:
+
+```text
+Task success
+Build success
+Test success
+Number of tool calls
+Number of failed tool calls
+Number of changed files
+Did it edit protected files?
+Did it create unnecessary files?
+Did it explain final result correctly?
+```
+
+This is how you improve the agent scientifically instead of guessing.
+
+---
+
+# 10. My recommended revised roadmap
+
+Your current planned phases are good, but I would reorder slightly.
+
+## Phase 1 — Agent loop hardening
+
+Implement now:
+
+```text
+Structured tool-error injection
+Explicit agent phases
+Retry policy
+Command result normalization
+Edit transaction system
+Final validation summary
+```
+
+This should be your immediate priority.
+
+---
+
+## Phase 2 — Smart context
+
+Implement:
+
+```text
+Repo map
+Hybrid search
+Symbol index
+Context ranking
+Context budget manager
+Related test finder
+```
+
+This gives the model better input.
+
+---
+
+## Phase 3 — Validation automation
+
+Implement:
+
+```text
+Detect test framework
+Detect build command
+Run changed-file-related tests
+Run full tests when needed
+Parse failures
+Repair loop
+```
+
+---
+
+## Phase 4 — Automatic test generation
+
+Implement:
+
+```text
+generate_tests tool/workflow
+test style detection
+test file locator
+test repair loop
+coverage hints
+```
+
+---
+
+## Phase 5 — Persistent memory
+
+Implement:
+
+```text
+.beep/memory/*.md
+memory reload
+command memory
+failure memory
+project conventions
+optional vector DB
+```
+
+Do markdown memory before Chroma/Qdrant/FAISS.
+
+---
+
+## Phase 6 — Skills
+
+Implement:
+
+```text
+skills/
+  python-bugfix/
+  add-tests/
+  refactor-module/
+  mcp-tool-creation/
+  cli-feature/
+```
+
+A skill should contain:
+
+```text
+instructions.md
+examples/
+optional scripts
+validation commands
+```
+
+---
+
+## Phase 7 — Subagents
+
+Only after your main loop is stable.
+
+Useful subagents:
+
+```text
+RepoExplorerAgent
+TestWriterAgent
+ReviewerAgent
+SecurityAgent
+MigrationAgent
+DocumentationAgent
+```
+
+Do not add subagents too early. They multiply complexity.
+
+---
+
+# 11. The most important missing features from your list
+
+Based on your status, these are the real gaps:
+
+| Priority | Feature                         | Why it matters                          |
+| -------: | ------------------------------- | --------------------------------------- |
+|        1 | Structured tool-error injection | Lets the agent recover intelligently    |
+|        2 | Edit transaction + rollback     | Makes file editing safe                 |
+|        3 | Smart context manager           | Prevents bad edits from missing context |
+|        4 | Validation policy               | Makes “done” measurable                 |
+|        5 | Test generation workflow        | Moves from coder to engineering agent   |
+|        6 | Persistent project memory       | Improves over time                      |
+|        7 | Eval harness                    | Lets you benchmark progress             |
+|        8 | Sandbox/permission policy       | Required for trust                      |
+|        9 | Skills                          | Makes workflows repeatable              |
+|       10 | Subagents                       | Useful later, not first                 |
+
+---
+
+# 12. Suggested project structure
+
+I would evolve your project toward this:
+
+```text
+beep/
+  agent/
+    loop.py
+    state.py
+    planner.py
+    executor.py
+    retry_policy.py
+
+  chat/
+    prompts.py
+    prompt_builder.py
+    response_parser.py
+
+  context/
+    manager.py
+    repo_map.py
+    symbol_index.py
+    file_ranker.py
+    context_budget.py
+
+  editing/
+    patcher.py
+    transaction.py
+    diff.py
+    rollback.py
+
+  errors/
+    models.py
+    classifier.py
+    injector.py
+
+  mcp/
+    client.py
+    adapter.py
+    discovery.py
+    presets.py
+
+  memory/
+    session.py
+    project.py
+    persistent.py
+    vector.py
+
+  security/
+    policy.py
+    sandbox.py
+    command_guard.py
+    path_guard.py
+
+  testrunner/
+    runner.py
+    detector.py
+    parser.py
+
+  testing/
+    generator.py
+    test_locator.py
+    coverage.py
+
+  validation/
+    policy.py
+    validator.py
+    commands.py
+
+  skills/
+    loader.py
+    registry.py
+    models.py
+
+  evals/
+    runner.py
+    metrics.py
+    cases/
+
+  cli/
+    main.py
+```
+
+---
+
+# 13. What I would implement next, exactly
+
+Start with these five tasks:
+
+```text
+1. Create StructuredToolError model
+2. Normalize all tool failures into StructuredToolError
+3. Inject structured errors into the next LLM turn
+4. Add EditTransaction around file writes
+5. Add ValidationPolicy that runs tests/build after edits
+```
+
+That will make your current agent much more reliable immediately.
+
+Then do:
+
+```text
+6. Add ContextManager with hybrid ranking
+7. Add GenerateTests workflow
+8. Add .beep/memory persistent project memory
+9. Add eval cases
+10. Add skills
+```
+
+Your current implementation is already past the toy-agent stage. The next step is to make it **safe, repeatable, measurable, and self-correcting**.

@@ -1,0 +1,453 @@
+Yes. For your coding agent, use **different libraries for different levels of code analysis**. Do not depend on one library only.
+
+## Best overall stack
+
+```bash
+pip install tree-sitter tree-sitter-language-pack libcst astroid jedi ruff mypy radon grimp import-linter semgrep
+```
+
+For your agent, I would organize them like this:
+
+| Need                         | Library                  | Use it for                                                           |
+| ---------------------------- | ------------------------ | -------------------------------------------------------------------- |
+| Multi-language parsing       | `tree-sitter`            | Parse Python, C#, JS, TS, Java, Go, Rust, etc.                       |
+| Python-safe analysis/editing | `libcst`                 | Analyze and modify Python while preserving formatting/comments       |
+| Python semantic inference    | `astroid`                | Deeper Python AST/inference, same engine family used by Pylint       |
+| Python symbols/references    | `jedi`                   | Go-to-definition, references, completions                            |
+| Python lint/style            | `ruff`                   | Fast linting and formatting                                          |
+| Python type checking         | `mypy` or `pyright`      | Type errors, bad function calls, invalid assignments                 |
+| Complexity metrics           | `radon`                  | Cyclomatic complexity, maintainability index, Halstead metrics       |
+| Import graph                 | `grimp`                  | Build Python package dependency/import graph                         |
+| Architecture rules           | `import-linter`          | Enforce Clean Architecture / DDD layer boundaries                    |
+| Security/custom rules        | `semgrep`                | Static analysis rules, security checks, custom architecture patterns |
+| C#/.NET deep analysis        | Roslyn via external tool | For real C# semantic analysis                                        |
+
+---
+
+# 1. For multi-language parsing: `tree-sitter`
+
+Use this when you want your agent to understand many languages.
+
+`tree-sitter` can build concrete syntax trees and update them efficiently as source code changes. The Python binding is available as `tree-sitter`. ([GitHub][1])
+
+Good for:
+
+```text
+class/function extraction
+imports/includes/usings
+method boundaries
+symbol outlines
+finding changed functions
+multi-language context selection
+```
+
+Recommended module:
+
+```text
+beep/codeanalysis/
+  tree_sitter_analyzer.py
+```
+
+Example model:
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass
+class CodeSymbol:
+    name: str
+    kind: str
+    file_path: str
+    start_line: int
+    end_line: int
+```
+
+Use `tree-sitter` for the **general code map** of the project.
+
+---
+
+# 2. For Python code analysis/editing: `LibCST`
+
+Use `libcst` when your agent edits Python code.
+
+LibCST parses Python source into a concrete syntax tree that keeps formatting details such as comments, whitespace, and parentheses, which makes it useful for codemods and linters. ([libcst.readthedocs.io][2])
+
+Good for:
+
+```text
+adding imports safely
+renaming functions/classes
+moving code
+adding decorators
+refactoring function signatures
+building Python-specific lint rules
+```
+
+This is better than string editing for Python.
+
+Example use:
+
+```python
+import libcst as cst
+
+
+class FunctionCollector(cst.CSTVisitor):
+    def __init__(self):
+        self.functions: list[str] = []
+
+    def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
+        self.functions.append(node.name.value)
+```
+
+Use `LibCST` for **Python-aware analysis and safe Python edits**.
+
+---
+
+# 3. For Python semantic inference: `astroid`
+
+Use `astroid` when you need deeper Python static analysis than the built-in `ast` module.
+
+Astroid is a library for AST parsing, static analysis, and inference, and it powers much of Pylint’s analysis. ([pylint.pycqa.org][3])
+
+Good for:
+
+```text
+inferring object types
+finding class attributes
+understanding imports
+analyzing function calls
+detecting possible member access issues
+```
+
+Use `astroid` for **Python semantic analysis**.
+
+---
+
+# 4. For Python references and navigation: `jedi`
+
+Use `jedi` if your agent needs IDE-like behavior.
+
+Jedi is a Python static analysis library focused on autocompletion, goto functionality, refactoring, code search, and finding references. ([jedi.readthedocs.io][4])
+
+Good for:
+
+```text
+go to definition
+find references
+list names in a file
+autocomplete-like suggestions
+understand imported symbols
+```
+
+Use `jedi` for **repo navigation and symbol references**.
+
+---
+
+# 5. For lint/style analysis: `ruff`
+
+Use `ruff` as the default Python linter/formatter.
+
+Ruff is an extremely fast Python linter and code formatter written in Rust, and its formatter is designed as a drop-in replacement for Black. ([Astral Docs][5])
+
+Good for:
+
+```text
+style issues
+unused imports
+bad patterns
+formatting
+import sorting
+automatic fixes
+```
+
+Your agent should run:
+
+```bash
+ruff check .
+ruff format .
+```
+
+or safer:
+
+```bash
+ruff check . --fix
+ruff format .
+```
+
+---
+
+# 6. For type analysis: `mypy` or `pyright`
+
+Use one of these for Python type checking.
+
+`mypy` is a static type checker that finds type-related bugs without running the program. ([mypy Documentation][6])
+
+`pyright` is a full-featured, standards-based static type checker designed for high performance and large Python codebases. ([GitHub][7])
+
+Use:
+
+```bash
+mypy .
+```
+
+or:
+
+```bash
+pyright
+```
+
+For your agent, I would support both and detect which one the project already uses.
+
+---
+
+# 7. For complexity and maintainability: `radon`
+
+Use `radon` to detect complex code.
+
+Radon can compute raw metrics, cyclomatic complexity, Halstead metrics, and maintainability index, and it also exposes an API. ([Radon][8])
+
+Good for:
+
+```text
+large/complex functions
+classes that need refactoring
+maintainability scores
+before/after refactor comparison
+```
+
+Commands:
+
+```bash
+radon cc .
+radon mi .
+```
+
+Use this for your **Clean Code reviewer**.
+
+---
+
+# 8. For architecture and dependency graphs: `grimp` + `import-linter`
+
+Use `grimp` to build import graphs. Grimp provides an `ImportGraph` API representing imports inside Python packages. ([Grimp][9])
+
+Use `import-linter` to enforce layer rules. Import Linter lets you impose constraints on imports between Python modules, including forbidden dependencies between module groups. ([Import Linter][10])
+
+This is perfect for your goal:
+
+```text
+domain must not import infrastructure
+domain must not import presentation
+application must not import presentation
+infrastructure may depend on application/domain
+presentation may depend on application
+```
+
+Example `.importlinter`:
+
+```ini
+[importlinter]
+root_package = my_app
+
+[importlinter:contract:domain_no_infra]
+name = Domain must not import infrastructure
+type = forbidden
+source_modules =
+    my_app.domain
+forbidden_modules =
+    my_app.infrastructure
+    my_app.presentation
+
+[importlinter:contract:application_no_presentation]
+name = Application must not import presentation
+type = forbidden
+source_modules =
+    my_app.application
+forbidden_modules =
+    my_app.presentation
+```
+
+Then run:
+
+```bash
+lint-imports
+```
+
+This is one of the best tools for **DDD / Clean Architecture enforcement** in Python.
+
+---
+
+# 9. For security/custom static rules: `semgrep`
+
+Use `semgrep` for custom rules and security scanning.
+
+Semgrep is a static analysis tool for finding bugs, vulnerabilities, and enforcing coding standards; it supports many languages and custom rules. ([Semgrep][11])
+
+Good for:
+
+```text
+security issues
+forbidden patterns
+custom clean-code rules
+custom architecture rules
+multi-language static analysis
+```
+
+Example use:
+
+```bash
+semgrep --config auto .
+```
+
+You can also write rules like:
+
+```yaml
+rules:
+  - id: no-business-logic-in-controller
+    pattern: |
+      class $XController:
+          ...
+    message: "Controller should not contain business logic."
+    severity: WARNING
+    languages: [python]
+```
+
+---
+
+# 10. For C#/.NET analysis from your Python agent
+
+For C#, do **not** rely only on Python libraries.
+
+Use your Python agent to call a small .NET/Roslyn analyzer tool.
+
+Roslyn APIs let tools examine and understand C# and Visual Basic codebases using syntax and semantic analysis APIs, and they can build analyzers, code fixes, and refactorings. ([Microsoft Learn][12])
+
+Recommended approach:
+
+```text
+Python agent
+  → calls dotnet analyzer CLI
+      → Roslyn analyzes .sln/.csproj
+      → returns JSON symbols/errors/dependencies
+  → Python agent uses JSON as context
+```
+
+Example output from your future Roslyn helper:
+
+```json
+{
+  "symbols": [
+    {
+      "name": "OrderService",
+      "kind": "class",
+      "file": "Application/Orders/OrderService.cs",
+      "methods": ["CreateOrder", "CancelOrder"]
+    }
+  ],
+  "diagnostics": [
+    {
+      "file": "Domain/Order.cs",
+      "line": 42,
+      "code": "CS8602",
+      "message": "Dereference of a possibly null reference."
+    }
+  ]
+}
+```
+
+This is the right design for your .NET background.
+
+---
+
+# My recommendation for your Beep agent
+
+Add these modules:
+
+```text
+beep/codeanalysis/
+  base.py
+  tree_sitter_analyzer.py
+  python_libcst_analyzer.py
+  python_astroid_analyzer.py
+  python_jedi_analyzer.py
+  complexity_analyzer.py
+  import_graph_analyzer.py
+  architecture_analyzer.py
+  semgrep_analyzer.py
+```
+
+And create a unified result model:
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+
+@dataclass
+class AnalysisIssue:
+    code: str
+    message: str
+    severity: Literal["info", "warning", "error"]
+    file_path: str
+    line: int | None = None
+    column: int | None = None
+    tool: str = "unknown"
+
+
+@dataclass
+class CodeAnalysisResult:
+    symbols: list[dict]
+    issues: list[AnalysisIssue]
+    dependencies: list[dict]
+    metrics: dict
+```
+
+Then your agent can use all analyzers through one API:
+
+```python
+class CodeAnalysisService:
+    def analyze_project(self, root_path: str) -> CodeAnalysisResult:
+        ...
+```
+
+---
+
+# Best starting set
+
+Start with these 5:
+
+```bash
+pip install tree-sitter tree-sitter-language-pack libcst ruff radon import-linter
+```
+
+Then add:
+
+```bash
+pip install astroid jedi mypy semgrep grimp
+```
+
+For your coding agent, the most valuable combination is:
+
+```text
+tree-sitter      → multi-language symbol/context extraction
+LibCST           → safe Python analysis and edits
+ruff             → clean code/style enforcement
+radon            → complexity/maintainability checks
+import-linter    → DDD/Clean Architecture dependency rules
+semgrep          → custom rules and security checks
+```
+
+That gives your agent real code analysis instead of depending only on the LLM.
+
+[1]: https://github.com/tree-sitter/py-tree-sitter?utm_source=chatgpt.com "Python bindings to the Tree-sitter parsing library"
+[2]: https://libcst.readthedocs.io/?utm_source=chatgpt.com "LibCST — LibCST documentation"
+[3]: https://pylint.pycqa.org/projects/astroid/en/latest/?utm_source=chatgpt.com "Astroid 4.2.0b3 documentation - Pylint"
+[4]: https://jedi.readthedocs.io/?utm_source=chatgpt.com "Jedi - an awesome autocompletion, static analysis and ..."
+[5]: https://docs.astral.sh/ruff/?utm_source=chatgpt.com "Ruff"
+[6]: https://mypy.readthedocs.io/?utm_source=chatgpt.com "mypy 1.20.2 documentation"
+[7]: https://github.com/microsoft/pyright?utm_source=chatgpt.com "microsoft/pyright: Static Type Checker for Python"
+[8]: https://radon.readthedocs.io/en/latest/?utm_source=chatgpt.com "Welcome to Radon's documentation!"
+[9]: https://grimp.readthedocs.io/en/stable/usage.html?utm_source=chatgpt.com "Usage - Grimp 3.14 documentation"
+[10]: https://import-linter.readthedocs.io/?utm_source=chatgpt.com "Import Linter - Read the Docs"
+[11]: https://semgrep.dev/docs/?utm_source=chatgpt.com "Docs home"
+[12]: https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/?utm_source=chatgpt.com "The .NET Compiler Platform SDK (Roslyn APIs) - C#"

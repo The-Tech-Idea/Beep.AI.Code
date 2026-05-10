@@ -1,0 +1,372 @@
+Yes, there **is** a C# library — the main one is **Roslyn**, officially called the **.NET Compiler Platform**.
+
+But important point:
+
+```text id="h7134c"
+Roslyn is a .NET/C# library, not a normal Python library.
+```
+
+So from your **Python agent**, the best approach is:
+
+```text id="n1f943"
+Python Agent
+  → calls C# Roslyn analyzer CLI
+      → analyzes .sln / .csproj / .cs files
+      → returns JSON
+  → Python agent uses JSON for context, errors, symbols, dependencies
+```
+
+Roslyn gives you syntax APIs, semantic APIs, symbols, bindings, diagnostics, refactoring support, and analyzer support for C# and VB code. Microsoft describes Roslyn as APIs for understanding .NET code, spotting errors, and fixing them. ([Microsoft Learn][1])
+
+---
+
+# Best C# libraries/tools for your agent
+
+| Purpose                                | Library / Tool                              |
+| -------------------------------------- | ------------------------------------------- |
+| C# syntax analysis                     | `Microsoft.CodeAnalysis.CSharp`             |
+| C# semantic analysis                   | `Microsoft.CodeAnalysis`                    |
+| Load `.sln` / `.csproj`                | `Microsoft.CodeAnalysis.Workspaces.MSBuild` |
+| Analyzer/code fix development          | `Microsoft.CodeAnalysis.CSharp.Workspaces`  |
+| Razor/Blazor support                   | `Microsoft.CodeAnalysis.Razor`              |
+| .NET code quality analyzers            | built-in Roslyn analyzers / NuGet analyzers |
+| Simple syntax-only parsing from Python | `tree-sitter-c-sharp`                       |
+| Calling .NET from Python               | `pythonnet`, but I prefer CLI JSON bridge   |
+
+The `Microsoft.CodeAnalysis.CSharp` NuGet package is specifically for C# compiler platform support and analyzing C# projects/solutions. ([NuGet][2]) The `Microsoft.CodeAnalysis.Workspaces.MSBuild` package is for analyzing MSBuild projects and solutions and is intended to be used with language workspace packages such as `Microsoft.CodeAnalysis.CSharp.Workspaces`. ([NuGet][3])
+
+---
+
+# What Roslyn can give your Python agent
+
+Roslyn can extract:
+
+```text id="7ll6kf"
+namespaces
+classes
+interfaces
+records
+structs
+enums
+methods
+properties
+fields
+constructors
+attributes
+using statements
+inheritance
+implemented interfaces
+method references
+diagnostics
+compiler errors
+nullable warnings
+semantic type information
+```
+
+The syntax API represents the full structure of C# or Visual Basic programs, including incomplete code while editing. ([Microsoft Learn][4]) The semantic APIs provide symbol and binding information, including the meaning and types represented by symbols in the program. ([Microsoft Learn][5])
+
+---
+
+# Recommended design for your Python agent
+
+Do **not** try to fully analyze C# directly in Python.
+
+Create this:
+
+```text id="yrgy9q"
+tools/
+  Beep.CSharpAnalyzer/
+    Beep.CSharpAnalyzer.csproj
+    Program.cs
+
+beep/
+  languages/
+    csharp.py
+  codeanalysis/
+    csharp_roslyn_client.py
+```
+
+Your Python agent calls:
+
+```bash id="85a9yl"
+dotnet run --project tools/Beep.CSharpAnalyzer -- analyze --solution MyApp.sln --output json
+```
+
+Then it receives JSON like:
+
+```json id="veh0kp"
+{
+  "projects": [
+    {
+      "name": "MyApp.Domain",
+      "files": [
+        {
+          "path": "Domain/Orders/Order.cs",
+          "symbols": [
+            {
+              "kind": "class",
+              "name": "Order",
+              "namespace": "MyApp.Domain.Orders",
+              "methods": ["Approve", "Cancel", "AddItem"]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "diagnostics": [
+    {
+      "file": "Application/Orders/CreateOrderHandler.cs",
+      "line": 42,
+      "column": 17,
+      "code": "CS0246",
+      "message": "The type or namespace name could not be found"
+    }
+  ]
+}
+```
+
+---
+
+# Minimal Roslyn analyzer project
+
+Create:
+
+```bash id="7l0iet"
+dotnet new console -n Beep.CSharpAnalyzer
+cd Beep.CSharpAnalyzer
+dotnet add package Microsoft.CodeAnalysis.CSharp.Workspaces
+dotnet add package Microsoft.CodeAnalysis.Workspaces.MSBuild
+dotnet add package Microsoft.Build.Locator
+```
+
+Example `Program.cs`:
+
+```csharp id="3hgno5"
+using System.Text.Json;
+using Microsoft.Build.Locator;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.MSBuild;
+
+if (!MSBuildLocator.IsRegistered)
+{
+    MSBuildLocator.RegisterDefaults();
+}
+
+var solutionPath = args.Length > 0 ? args[0] : throw new ArgumentException("Solution path required.");
+
+using var workspace = MSBuildWorkspace.Create();
+var solution = await workspace.OpenSolutionAsync(solutionPath);
+
+var result = new List<object>();
+
+foreach (var project in solution.Projects)
+{
+    var projectInfo = new
+    {
+        project.Name,
+        project.FilePath,
+        Documents = new List<object>()
+    };
+
+    foreach (var document in project.Documents)
+    {
+        var syntaxRoot = await document.GetSyntaxRootAsync();
+        var semanticModel = await document.GetSemanticModelAsync();
+
+        if (syntaxRoot is null || semanticModel is null)
+        {
+            continue;
+        }
+
+        var symbols = syntaxRoot
+            .DescendantNodes()
+            .Select(node => semanticModel.GetDeclaredSymbol(node))
+            .Where(symbol => symbol is not null)
+            .Select(symbol => new
+            {
+                Name = symbol!.Name,
+                Kind = symbol.Kind.ToString(),
+                Namespace = symbol.ContainingNamespace?.ToDisplayString(),
+                Type = symbol.ToDisplayString()
+            })
+            .ToList();
+
+        projectInfo.Documents.Add(new
+        {
+            document.Name,
+            document.FilePath,
+            Symbols = symbols
+        });
+    }
+
+    result.Add(projectInfo);
+}
+
+Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions
+{
+    WriteIndented = true
+}));
+```
+
+Then from Python:
+
+```python id="qn68lz"
+import json
+import subprocess
+from pathlib import Path
+
+
+def analyze_csharp_solution(solution_path: str) -> dict:
+    command = [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/Beep.CSharpAnalyzer",
+        "--",
+        solution_path,
+    ]
+
+    completed = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if completed.returncode != 0:
+        return {
+            "ok": False,
+            "error": completed.stderr,
+            "stdout": completed.stdout,
+        }
+
+    return {
+        "ok": True,
+        "data": json.loads(completed.stdout),
+    }
+```
+
+---
+
+# Why not use `pythonnet` directly?
+
+You **can** use `pythonnet` to load .NET assemblies from Python. Python.NET allows Python code to integrate with the .NET CLR, and assemblies must be loaded explicitly with `AddReference`. ([pythonnet][6])
+
+But for your coding agent, I would avoid direct Roslyn-in-Python at first because:
+
+```text id="43lwm6"
+Roslyn setup is easier inside a .NET console app
+MSBuildWorkspace is easier to initialize in .NET
+Errors are easier to debug
+Version conflicts are easier to control
+Python stays clean
+The JSON bridge is language-neutral
+```
+
+So use `pythonnet` only if you really need in-process integration.
+
+---
+
+# What about `tree-sitter` for C#?
+
+`tree-sitter` is useful for **syntax-level** C# analysis:
+
+```text id="4nn9fz"
+find classes
+find methods
+find properties
+find using statements
+find rough file structure
+```
+
+But it does **not** understand full C# semantics like Roslyn:
+
+```text id="wmxpg2"
+symbol resolution
+type inference
+project references
+NuGet references
+nullable analysis
+compiler diagnostics
+method overload resolution
+```
+
+So the practical rule is:
+
+```text id="ezr32j"
+Use tree-sitter for fast multi-language indexing.
+Use Roslyn for serious C#/.NET analysis.
+```
+
+---
+
+# Best implementation for your Beep agent
+
+Add a C# adapter like this:
+
+```python id="jqopws"
+class CSharpLanguageAdapter:
+    name = "csharp"
+    extensions = [".cs", ".csproj", ".sln", ".razor"]
+
+    def detect(self, root_path: str) -> bool:
+        root = Path(root_path)
+        return bool(list(root.glob("*.sln")) or list(root.rglob("*.csproj")))
+
+    def analyze(self, root_path: str) -> dict:
+        solution_files = list(Path(root_path).glob("*.sln"))
+
+        if not solution_files:
+            return {
+                "ok": False,
+                "error": "No solution file found."
+            }
+
+        return analyze_csharp_solution(str(solution_files[0]))
+
+    def get_build_commands(self, root_path: str):
+        return [["dotnet", "build"]]
+
+    def get_test_commands(self, root_path: str):
+        return [["dotnet", "test"]]
+```
+
+And later expand the Roslyn CLI to support:
+
+```text id="ybxxaz"
+analyze symbols
+analyze dependencies
+analyze diagnostics
+find references
+find implementations
+detect layer violations
+detect domain services
+detect business logic in controllers
+suggest refactor locations
+```
+
+---
+
+# Final answer
+
+Yes, there **is** a C# library: **Roslyn / Microsoft.CodeAnalysis**.
+
+For your Python coding agent, the best design is:
+
+```text id="wcw6a9"
+Python agent core
+  + tree-sitter for quick C# syntax indexing
+  + Roslyn .NET CLI helper for deep C# analysis
+  + dotnet build/test for validation
+  + JSON bridge between Python and C#
+```
+
+That gives you real C# support instead of asking the LLM to guess.
+
+[1]: https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/?utm_source=chatgpt.com "The .NET Compiler Platform SDK (Roslyn APIs) - C#"
+[2]: https://www.nuget.org/packages/microsoft.codeanalysis.csharp/?utm_source=chatgpt.com "Microsoft.CodeAnalysis.CSharp 5.3.0"
+[3]: https://www.nuget.org/packages/Microsoft.CodeAnalysis.Workspaces.MSBuild/?utm_source=chatgpt.com "Microsoft.CodeAnalysis.Workspaces.MSBuild 5.3.0"
+[4]: https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/get-started/syntax-analysis?utm_source=chatgpt.com "Get started with syntax analysis (Roslyn APIs) - C#"
+[5]: https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/get-started/semantic-analysis?utm_source=chatgpt.com "Get started with semantic analysis - C#"
+[6]: https://pythonnet.github.io/pythonnet/python.html?utm_source=chatgpt.com "Embedding .NET into Python - Python.NET documentation"

@@ -1,0 +1,810 @@
+Yes — you can make your agent **default to Clean Code, SOLID, DDD, domain services, layered architecture, tests, and project conventions**.
+
+But do **not** rely only on the system prompt. You should implement it as a **standards/rules engine** inside your agent.
+
+The idea:
+
+```text
+LLM prompt tells the agent the standards.
+Rules engine enforces the standards.
+Templates generate code in the right structure.
+Validators check if the result follows the rules.
+Review step catches violations before final answer.
+```
+
+---
+
+# 1. Add a default coding standards layer
+
+Create something like:
+
+```text
+beep/
+  standards/
+    clean_code.md
+    solid.md
+    ddd.md
+    python.md
+    csharp.md
+    architecture.md
+    test_rules.md
+    naming.md
+```
+
+Example:
+
+```text
+beep/standards/default.md
+```
+
+```md
+# Default Coding Standards
+
+The agent must prefer:
+
+- Clean Code
+- SOLID principles
+- Domain-driven design where appropriate
+- Small functions with clear names
+- Explicit domain models
+- Separation between domain, application, infrastructure, and presentation
+- Constructor dependency injection where applicable
+- Tests for new behavior
+- No unnecessary abstractions
+- No large god classes
+- No business logic inside controllers, UI components, or CLI commands
+- No direct database access inside domain objects
+- No silent exception swallowing
+- Clear error handling
+```
+
+Then inject this into your agent prompt automatically.
+
+---
+
+# 2. Use architecture profiles
+
+Not every task needs DDD. A small script does not need domain services.
+
+So create **architecture profiles**.
+
+```text
+beep/profiles/
+  simple_script.yaml
+  clean_architecture.yaml
+  ddd.yaml
+  web_api.yaml
+  cli_app.yaml
+  library.yaml
+  enterprise_app.yaml
+```
+
+Example:
+
+```yaml
+# beep/profiles/ddd.yaml
+
+name: ddd
+description: Domain-driven design architecture profile
+
+rules:
+  - Put business rules in the domain layer.
+  - Use application services for use cases.
+  - Use domain services only when logic does not naturally belong to one entity.
+  - Keep infrastructure concerns outside the domain layer.
+  - Do not inject repositories into entities.
+  - Do not put validation/business rules only in controllers.
+  - Prefer value objects for meaningful domain concepts.
+  - Prefer aggregates for consistency boundaries.
+  - Use repositories only for aggregate roots.
+  - Add tests for domain behavior.
+
+layers:
+  domain:
+    allowed_dependencies: []
+  application:
+    allowed_dependencies:
+      - domain
+  infrastructure:
+    allowed_dependencies:
+      - domain
+      - application
+  presentation:
+    allowed_dependencies:
+      - application
+```
+
+Then your agent can detect or ask internally:
+
+```text
+Is this task simple, application-level, or domain-heavy?
+```
+
+For domain-heavy tasks, it loads the DDD profile.
+
+---
+
+# 3. Add project rules file
+
+Allow each project to override defaults.
+
+For example:
+
+```text
+.beep.md
+```
+
+```md
+# Beep Project Rules
+
+Architecture:
+- Use Clean Architecture.
+- Use domain services for business logic that spans multiple entities.
+- Keep controllers thin.
+- Keep UI components free of business rules.
+- Application layer contains use cases.
+- Infrastructure layer contains database, file system, HTTP, and external APIs.
+
+Testing:
+- Add unit tests for domain behavior.
+- Add integration tests for repository or infrastructure behavior.
+- Do not fake domain logic in tests.
+
+Naming:
+- Services: `SomethingService`
+- Use cases: `CreateOrderHandler`, `ApproveInvoiceUseCase`
+- Repositories: `IOrderRepository`
+- Value objects: meaningful names such as `Money`, `EmailAddress`, `Quantity`.
+
+Python:
+- Use type hints.
+- Prefer dataclasses or Pydantic models for structured data.
+- Avoid global mutable state.
+- Use dependency injection through constructors or function parameters.
+```
+
+Your prompt builder should load:
+
+```text
+Global standards
++ Language standards
++ Architecture profile
++ Project .beep.md
++ Task-specific context
+```
+
+---
+
+# 4. Add rule categories
+
+Do not make one giant prompt. Categorize your rules.
+
+Suggested structure:
+
+```python
+@dataclass
+class CodingStandard:
+    name: str
+    description: str
+    rules: list[str]
+    applies_to_languages: list[str]
+    applies_to_project_types: list[str]
+    priority: int
+```
+
+Example:
+
+```python
+CLEAN_CODE_RULES = CodingStandard(
+    name="clean_code",
+    description="General clean code rules",
+    applies_to_languages=["*"],
+    applies_to_project_types=["*"],
+    priority=100,
+    rules=[
+        "Use clear and intention-revealing names.",
+        "Keep functions small and focused.",
+        "Avoid duplicated logic.",
+        "Avoid large classes with unrelated responsibilities.",
+        "Prefer explicit error handling.",
+        "Avoid unnecessary abstractions.",
+    ],
+)
+```
+
+---
+
+# 5. Build a standards selector
+
+The agent should not inject every rule every time. It should select relevant standards.
+
+Example:
+
+```python
+class StandardsSelector:
+    def select(
+        self,
+        language: str,
+        project_type: str,
+        task_type: str,
+        architecture_profile: str | None,
+    ) -> list[CodingStandard]:
+        selected = []
+
+        selected.append(CLEAN_CODE_RULES)
+        selected.append(SOLID_RULES)
+
+        if language == "python":
+            selected.append(PYTHON_RULES)
+
+        if language == "csharp":
+            selected.append(CSHARP_RULES)
+
+        if architecture_profile in {"ddd", "clean_architecture"}:
+            selected.append(DDD_RULES)
+            selected.append(CLEAN_ARCHITECTURE_RULES)
+
+        if task_type in {"new_feature", "refactor", "business_logic"}:
+            selected.append(TESTING_RULES)
+
+        return selected
+```
+
+---
+
+# 6. Add DDD/domain service rules
+
+Important: domain services should not be used everywhere.
+
+A domain service is appropriate when:
+
+```text
+The logic is business/domain logic
+AND it does not naturally belong to one entity
+AND it coordinates multiple domain objects
+AND it should not depend on infrastructure
+```
+
+It is **not** appropriate when:
+
+```text
+The logic belongs inside an entity
+The logic is simple CRUD
+The logic is application workflow
+The logic calls the database/API directly
+The logic is just formatting/mapping
+```
+
+Add this to your rules:
+
+```md
+# Domain Service Rules
+
+Use a domain service only when domain behavior does not naturally belong to a single entity or value object.
+
+Prefer this order:
+
+1. Value Object
+2. Entity method
+3. Aggregate method
+4. Domain Service
+5. Application Service
+
+Do not place infrastructure dependencies inside domain services.
+
+Bad:
+- OrderService directly saves to database.
+- CustomerService only wraps repository CRUD.
+- InvoiceDomainService sends emails.
+
+Good:
+- PricingService calculates price using multiple domain objects.
+- EligibilityPolicy determines whether a user qualifies.
+- RiskAssessmentService evaluates multiple domain rules.
+```
+
+---
+
+# 7. Give the agent architecture decision rules
+
+The agent should know where code goes.
+
+For DDD/Clean Architecture:
+
+```text
+Domain layer:
+- Entities
+- Value objects
+- Domain services
+- Domain events
+- Domain exceptions
+- Repository interfaces, optional depending on style
+
+Application layer:
+- Use cases
+- Command handlers
+- Query handlers
+- DTOs
+- Application services
+- Transaction orchestration
+
+Infrastructure layer:
+- Database repositories
+- External API clients
+- File system
+- Email/SMS
+- Framework-specific implementation
+
+Presentation layer:
+- Controllers
+- CLI commands
+- UI components
+- API endpoints
+```
+
+Agent rule:
+
+```text
+When adding business logic:
+- Do not put it in controller/UI/route handler.
+- First look for existing domain model.
+- If logic belongs to entity, add method to entity.
+- If logic spans multiple entities, use domain service.
+- If logic coordinates persistence/external services, use application service.
+```
+
+---
+
+# 8. Add templates/scaffolding
+
+This is how you make the agent generate consistent code.
+
+Example Python DDD structure:
+
+```text
+src/
+  my_app/
+    domain/
+      entities/
+      value_objects/
+      services/
+      events/
+      exceptions.py
+
+    application/
+      use_cases/
+      commands/
+      queries/
+      dto/
+      interfaces/
+
+    infrastructure/
+      persistence/
+      external/
+      config/
+
+    presentation/
+      api/
+      cli/
+```
+
+Example template:
+
+```python
+# domain/services/pricing_service.py
+
+from decimal import Decimal
+
+from my_app.domain.entities.order import Order
+from my_app.domain.value_objects.money import Money
+
+
+class PricingService:
+    """
+    Domain service for pricing rules that span multiple domain objects.
+    """
+
+    def calculate_total(self, order: Order) -> Money:
+        subtotal = sum(item.total.amount for item in order.items)
+        discount = self._calculate_discount(order)
+        return Money(amount=subtotal - discount, currency=order.currency)
+
+    def _calculate_discount(self, order: Order) -> Decimal:
+        # Domain rule goes here.
+        return Decimal("0.00")
+```
+
+For C# style:
+
+```csharp
+public sealed class PricingService
+{
+    public Money CalculateTotal(Order order)
+    {
+        var subtotal = order.Items.Sum(x => x.Total.Amount);
+        var discount = CalculateDiscount(order);
+
+        return new Money(subtotal - discount, order.Currency);
+    }
+
+    private decimal CalculateDiscount(Order order)
+    {
+        return 0m;
+    }
+}
+```
+
+Even though your agent is Python, it can use templates for any target language.
+
+---
+
+# 9. Add a review step before final answer
+
+After code changes, run a standards review.
+
+Example review checklist:
+
+```text
+Clean Code Review:
+- Are names clear?
+- Are functions too large?
+- Is there duplicate logic?
+- Is business logic in the correct layer?
+- Are dependencies pointing in the right direction?
+- Are tests added or updated?
+- Are errors handled clearly?
+- Did the agent add unnecessary abstraction?
+```
+
+Implement:
+
+```python
+class StandardsReviewer:
+    def review(self, changed_files: list[str], profile: ArchitectureProfile) -> list[ReviewIssue]:
+        ...
+```
+
+Basic issue model:
+
+```python
+@dataclass
+class ReviewIssue:
+    severity: str
+    file_path: str
+    line: int | None
+    rule: str
+    message: str
+    suggested_fix: str | None = None
+```
+
+Then inject the review back into the agent:
+
+```xml
+<standards_review>
+  <issue severity="warning">
+    Business logic was added to presentation/api/orders.py.
+    Move it to application use case or domain service.
+  </issue>
+</standards_review>
+```
+
+Then let the agent fix it.
+
+---
+
+# 10. Add static tools per language
+
+For Python, use:
+
+```text
+ruff
+mypy
+pytest
+coverage
+bandit optional
+radon optional
+```
+
+For JavaScript/TypeScript:
+
+```text
+eslint
+prettier
+tsc
+jest/vitest
+```
+
+For C#:
+
+```text
+dotnet format
+dotnet build
+dotnet test
+Roslyn analyzers
+StyleCop optional
+```
+
+For architecture rules, you can add custom checks.
+
+Example Python layer dependency check:
+
+```python
+FORBIDDEN_IMPORTS = {
+    "domain": ["infrastructure", "presentation"],
+    "application": ["presentation"],
+}
+```
+
+Pseudo-check:
+
+```python
+def validate_layer_imports(file_path: str, content: str) -> list[str]:
+    issues = []
+
+    if "/domain/" in file_path:
+        forbidden = ["infrastructure", "presentation"]
+        for name in forbidden:
+            if f"import {name}" in content or f"from {name}" in content:
+                issues.append(f"Domain layer must not depend on {name}")
+
+    return issues
+```
+
+This is how you enforce architecture, not just suggest it.
+
+---
+
+# 11. Add task classification
+
+The standards should change depending on the task.
+
+Example:
+
+```text
+Bug fix:
+- Minimal change
+- Preserve existing architecture
+- Add regression test if possible
+
+New feature:
+- Use architecture profile
+- Add or update tests
+- Keep business logic out of presentation layer
+
+Refactor:
+- Preserve behavior
+- Run tests before and after
+- Avoid unrelated formatting changes
+
+Test generation:
+- Follow existing test style
+- Do not change production behavior unless requested
+
+Prototype:
+- Allow simpler structure
+- Avoid overengineering
+```
+
+Add:
+
+```python
+class TaskType(str, Enum):
+    BUG_FIX = "bug_fix"
+    NEW_FEATURE = "new_feature"
+    REFACTOR = "refactor"
+    TEST_GENERATION = "test_generation"
+    DOCUMENTATION = "documentation"
+    PROTOTYPE = "prototype"
+```
+
+Then prompt:
+
+```text
+Task type: new_feature
+Architecture profile: ddd
+Coding standards: clean_code, solid, ddd, testing
+```
+
+---
+
+# 12. Add “do not overengineer” rules
+
+This is important. If you tell an agent “always use DDD,” it may create 20 files for a tiny change.
+
+Add this rule:
+
+```md
+# Simplicity Rule
+
+Use the simplest design that satisfies the task and fits the existing project.
+
+Do not introduce:
+- New layers
+- New interfaces
+- New factories
+- New domain services
+- New abstractions
+
+unless they solve a real design problem or match the existing architecture.
+```
+
+Domain services should be default **when business logic needs them**, not for every method.
+
+Better rule:
+
+```text
+Prefer domain-oriented design for business applications.
+Use domain services when domain rules span multiple entities or value objects.
+Do not create service classes for simple CRUD or simple property updates.
+```
+
+---
+
+# 13. Prompt addition example
+
+In your `CODE_AGENT` prompt, add something like this:
+
+```text
+## Default Engineering Standards
+
+You must produce code that follows Clean Code, SOLID, and the active architecture profile.
+
+Default rules:
+- Prefer simple, readable code.
+- Keep functions focused.
+- Use clear names.
+- Avoid duplicated logic.
+- Do not overengineer.
+- Respect the existing project architecture.
+- Keep business logic out of UI/controllers/routes.
+- Put domain behavior in entities/value objects when it naturally belongs there.
+- Use domain services only for domain rules that span multiple domain objects.
+- Use application services/use cases for orchestration, persistence, transactions, and external APIs.
+- Add or update tests for behavior changes.
+- Run the relevant validation command after edits when available.
+
+When unsure:
+1. Inspect existing project structure.
+2. Follow existing conventions.
+3. Prefer minimal safe changes.
+4. Explain any architectural decision in the final response.
+```
+
+---
+
+# 14. Better: inject standards dynamically
+
+Instead of hardcoding everything in `prompts.py`, build the prompt from parts:
+
+```python
+class PromptBuilder:
+    def build_code_agent_prompt(
+        self,
+        tools: list[str],
+        project_profile: ProjectProfile,
+        standards: list[CodingStandard],
+        memory: str,
+    ) -> str:
+        return "\n\n".join([
+            BASE_CODE_AGENT_PROMPT,
+            self.render_tools(tools),
+            self.render_project_profile(project_profile),
+            self.render_standards(standards),
+            self.render_memory(memory),
+        ])
+```
+
+This makes your agent flexible.
+
+---
+
+# 15. Recommended implementation order
+
+For your current project, implement this order:
+
+```text
+1. Add standards markdown files
+2. Add project .beep.md rules loader
+3. Add architecture profiles
+4. Add standards selector
+5. Inject selected standards into prompt
+6. Add code review checklist after edits
+7. Add layer dependency validator
+8. Add language-specific lint/test commands
+9. Add scaffolding templates
+10. Add evaluation cases for architecture quality
+```
+
+---
+
+# 16. Minimal version you can build now
+
+Start simple.
+
+Create:
+
+```text
+beep/standards/
+  default.md
+  clean_code.md
+  ddd.md
+  python.md
+```
+
+Create:
+
+```text
+beep/standards/loader.py
+```
+
+```python
+from pathlib import Path
+
+
+class StandardsLoader:
+    def __init__(self, standards_dir: Path):
+        self.standards_dir = standards_dir
+
+    def load_default_standards(self) -> str:
+        files = [
+            "default.md",
+            "clean_code.md",
+            "ddd.md",
+            "python.md",
+        ]
+
+        parts: list[str] = []
+
+        for file_name in files:
+            path = self.standards_dir / file_name
+            if path.exists():
+                parts.append(path.read_text(encoding="utf-8"))
+
+        return "\n\n".join(parts)
+```
+
+Then in your prompt builder:
+
+```python
+standards_text = standards_loader.load_default_standards()
+
+prompt = f"""
+{CODE_AGENT}
+
+## Active Coding Standards
+
+{standards_text}
+"""
+```
+
+This gives you the first version quickly.
+
+---
+
+# Final recommendation
+
+Make Clean Code and DDD support a **first-class part of your agent**, not just a paragraph in the prompt.
+
+You want these layers:
+
+```text
+Standards files
++ Project rules
++ Architecture profiles
++ Prompt injection
++ Templates
++ Static checks
++ Review step
++ Validation commands
+```
+
+The rule should be:
+
+```text
+By default, produce simple, clean, testable code.
+For business/domain-heavy features, use DDD/Clean Architecture.
+Use domain services only when the domain behavior does not naturally belong to one entity or value object.
+Never overengineer simple changes.
+```
+
+That gives you the best balance: **clean architecture by default**, but still practical.

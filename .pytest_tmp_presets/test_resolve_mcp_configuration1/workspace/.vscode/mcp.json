@@ -1,0 +1,1 @@
+{"servers": {"chrome": {"type": "stdio", "command": "npx", "args": ["-y", "chrome-devtools-mcp@latest"]}}}

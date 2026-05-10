@@ -1,0 +1,229 @@
+{
+  "name": "perplexity",
+  "command": "npx",
+  "args": [
+    "-y",
+    "@perplexity-ai/mcp-server"
+  ],
+  "env": {
+    "PERPLEXITY_API_KEY": "token"
+  },
+  "tools": [
+    {
+      "name": "perplexity_search",
+      "description": "Search the web and return ranked results with titles, URLs, snippets, and dates.",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "description": "Search query string."
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum number of results to return.",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "max_tokens_per_page": {
+          "type": "integer",
+          "description": "Maximum tokens to extract per webpage.",
+          "minimum": 256,
+          "maximum": 2048
+        },
+        "country": {
+          "type": "string",
+          "description": "ISO 3166-1 alpha-2 country code for regional results."
+        }
+      }
+    },
+    {
+      "name": "perplexity_ask",
+      "description": "Answer a question using the Sonar Pro model with web grounding and citations.",
+      "parameters": {
+        "messages": {
+          "type": "array",
+          "description": "Conversation messages.",
+          "items": {
+            "type": "object",
+            "description": "Conversation message.",
+            "properties": {
+              "role": {
+                "type": "string",
+                "description": "Role of the message sender.",
+                "enum": [
+                  "system",
+                  "user",
+                  "assistant"
+                ]
+              },
+              "content": {
+                "type": "string",
+                "description": "Message content."
+              }
+            },
+            "required": [
+              "role",
+              "content"
+            ]
+          }
+        },
+        "search_recency_filter": {
+          "type": "string",
+          "description": "Filter results by recency.",
+          "enum": [
+            "hour",
+            "day",
+            "week",
+            "month",
+            "year"
+          ]
+        },
+        "search_domain_filter": {
+          "type": "array",
+          "description": "Restrict results to specific domains; prefix with '-' to exclude a domain.",
+          "items": {
+            "type": "string",
+            "description": "Domain filter entry."
+          }
+        },
+        "search_context_size": {
+          "type": "string",
+          "description": "Controls how much web context is retrieved.",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    {
+      "name": "perplexity_research",
+      "description": "Run deep multi-source research with the Sonar Deep Research model.",
+      "parameters": {
+        "messages": {
+          "type": "array",
+          "description": "Conversation messages.",
+          "items": {
+            "type": "object",
+            "description": "Conversation message.",
+            "properties": {
+              "role": {
+                "type": "string",
+                "description": "Role of the message sender.",
+                "enum": [
+                  "system",
+                  "user",
+                  "assistant"
+                ]
+              },
+              "content": {
+                "type": "string",
+                "description": "Message content."
+              }
+            },
+            "required": [
+              "role",
+              "content"
+            ]
+          }
+        },
+        "strip_thinking": {
+          "type": "boolean",
+          "description": "Remove <think> blocks from the response."
+        },
+        "reasoning_effort": {
+          "type": "string",
+          "description": "Controls reasoning depth for deep research.",
+          "enum": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    },
+    {
+      "name": "perplexity_reason",
+      "description": "Use the Sonar Reasoning Pro model for analytical and step-by-step reasoning.",
+      "parameters": {
+        "messages": {
+          "type": "array",
+          "description": "Conversation messages.",
+          "items": {
+            "type": "object",
+            "description": "Conversation message.",
+            "properties": {
+              "role": {
+                "type": "string",
+                "description": "Role of the message sender.",
+                "enum": [
+                  "system",
+                  "user",
+                  "assistant"
+                ]
+              },
+              "content": {
+                "type": "string",
+                "description": "Message content."
+              }
+            },
+            "required": [
+              "role",
+              "content"
+            ]
+          }
+        },
+        "strip_thinking": {
+          "type": "boolean",
+          "description": "Remove <think> blocks from the response."
+        },
+        "search_recency_filter": {
+          "type": "string",
+          "description": "Filter results by recency.",
+          "enum": [
+            "hour",
+            "day",
+            "week",
+            "month",
+            "year"
+          ]
+        },
+        "search_domain_filter": {
+          "type": "array",
+          "description": "Restrict results to specific domains; prefix with '-' to exclude a domain.",
+          "items": {
+            "type": "string",
+            "description": "Domain filter entry."
+          }
+        },
+        "search_context_size": {
+          "type": "string",
+          "description": "Controls how much web context is retrieved.",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "preset": "perplexity",
+    "preset_title": "Perplexity",
+    "description": "Perplexity search, ask, research, and reasoning MCP server.",
+    "docs_url": "https://docs.perplexity.ai/guides/mcp-server",
+    "verification_scope": "launch-and-tool-metadata",
+    "tool_contracts_included": true,
+    "tool_names": [
+      "perplexity_search",
+      "perplexity_ask",
+      "perplexity_research",
+      "perplexity_reason"
+    ],
+    "required_env": [
+      "PERPLEXITY_API_KEY"
+    ]
+  }
+}

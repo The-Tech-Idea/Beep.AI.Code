@@ -1,0 +1,29 @@
+{
+  "name": "firecrawl",
+  "command": "npx",
+  "args": [
+    "-y",
+    "firecrawl-mcp"
+  ],
+  "env": {
+    "FIRECRAWL_API_KEY": "token"
+  },
+  "tools": [],
+  "metadata": {
+    "preset": "firecrawl",
+    "preset_title": "Firecrawl",
+    "description": "Web search, scraping, crawl, and extraction tools from Firecrawl.",
+    "docs_url": "https://github.com/firecrawl/firecrawl-mcp-server",
+    "verification_scope": "launch-metadata-only",
+    "tool_contracts_included": false,
+    "required_env": [
+      "FIRECRAWL_API_KEY"
+    ],
+    "optional_env": [
+      "FIRECRAWL_API_URL"
+    ],
+    "notes": [
+      "Cloud API requires FIRECRAWL_API_KEY unless you point to a self-hosted FIRECRAWL_API_URL."
+    ]
+  }
+}

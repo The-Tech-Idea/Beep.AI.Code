@@ -1,0 +1,27 @@
+{
+  "name": "beep-ai-code",
+  "version": "0.1.0",
+  "description": "Terminal-native AI coding assistant powered by Beep.AI.Server",
+  "keywords": ["cli", "ai", "code-assistant", "beep-ai"],
+  "homepage": "https://github.com/The-Tech-Idea/Beep.AI.Code",
+  "bugs": "https://github.com/The-Tech-Idea/Beep.AI.Code/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/The-Tech-Idea/Beep.AI.Code.git"
+  },
+  "license": "MIT",
+  "bin": {
+    "beep": "./bin/beep.js"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "install.js"
+  ]
+}

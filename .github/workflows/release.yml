@@ -1,0 +1,260 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # ── 1. Build platform binaries ───────────────────────────────────────────
+  build-binary:
+    name: Binary / ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Linux x86_64
+            runner: ubuntu-latest
+            python: '3.11'
+            asset: beep-linux-x86_64
+            ext: ''
+
+          - label: Linux aarch64
+            runner: ubuntu-24.04-arm
+            python: '3.11'
+            asset: beep-linux-aarch64
+            ext: ''
+
+          - label: macOS Apple Silicon
+            runner: macos-14
+            python: '3.11'
+            asset: beep-darwin-aarch64
+            ext: ''
+
+          - label: macOS Intel
+            runner: macos-13
+            python: '3.11'
+            asset: beep-darwin-x86_64
+            ext: ''
+
+          - label: Windows x64
+            runner: windows-latest
+            python: '3.11'
+            asset: beep-windows-x86_64
+            ext: .exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install build dependencies
+        run: pip install pyinstaller && pip install -e ".[all]"
+
+      - name: Build binary (Unix)
+        if: runner.os != 'Windows'
+        run: pyinstaller beep.spec --clean --noconfirm
+
+      - name: Build binary (Windows)
+        if: runner.os == 'Windows'
+        run: pyinstaller beep.spec --clean --noconfirm
+
+      - name: Stage binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x dist/beep
+          mv dist/beep dist/${{ matrix.asset }}
+
+      - name: Stage binary (Windows)
+        if: runner.os == 'Windows'
+        run: Rename-Item dist\beep.exe dist\${{ matrix.asset }}.exe
+
+      - name: Smoke-test binary (Unix)
+        if: runner.os != 'Windows'
+        run: dist/${{ matrix.asset }} --version
+
+      - name: Smoke-test binary (Windows)
+        if: runner.os == 'Windows'
+        run: dist\${{ matrix.asset }}.exe --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}${{ matrix.ext }}
+          if-no-files-found: error
+
+  # ── 2. Build Linux packages (.deb, .rpm) ─────────────────────────────────
+  build-linux-packages:
+    name: Linux packages (.deb, .rpm)
+    runs-on: ubuntu-latest
+    needs: build-binary
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Linux x86_64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: beep-linux-x86_64
+          path: dist/
+
+      - name: Install packaging tools
+        run: sudo apt-get install -y dpkg rpm
+
+      - name: Make scripts executable
+        run: chmod +x scripts/build_deb.sh scripts/build_rpm.sh
+
+      - name: Build .deb
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          scripts/build_deb.sh dist/beep-linux-x86_64 "$VERSION"
+
+      - name: Build .rpm
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          scripts/build_rpm.sh dist/beep-linux-x86_64 "$VERSION"
+
+      - name: Upload .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: beep-linux-amd64-deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+      - name: Upload .rpm
+        uses: actions/upload-artifact@v4
+        with:
+          name: beep-linux-x86_64-rpm
+          path: dist/*.rpm
+          if-no-files-found: error
+
+  # ── 3. Build Python wheel + sdist ────────────────────────────────────────
+  build-python-dist:
+    name: Python wheel + sdist
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build
+        run: pip install build && python -m build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/
+          if-no-files-found: error
+
+  # ── 4. Create GitHub Release ──────────────────────────────────────────────
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-binary
+      - build-linux-packages
+      - build-python-dist
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets/
+          merge-multiple: true
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/**
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            **curl (Linux / macOS)**
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/The-Tech-Idea/Beep.AI.Code/master/scripts/install.sh | bash
+            ```
+
+            **PowerShell (Windows)**
+            ```powershell
+            irm https://raw.githubusercontent.com/The-Tech-Idea/Beep.AI.Code/master/scripts/install.ps1 | iex
+            ```
+
+            **npm / bun**
+            ```
+            npm i -g beep-ai-code
+            bun add -g beep-ai-code
+            ```
+
+            **Homebrew**
+            ```
+            brew install the-tech-idea/tap/beep
+            ```
+
+            **pipx**
+            ```
+            pipx install beep-ai-code
+            ```
+
+  # ── 5. Publish npm package ────────────────────────────────────────────────
+  publish-npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: release
+    environment: npm-publish
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Sync version in npm/package.json with the git tag
+      - name: Set npm version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd npm
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Publish to npm (dry run in non-production)
+        run: cd npm && npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ── 6. Publish Python package to PyPI ────────────────────────────────────
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: release
+    environment: pypi-publish
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download Python dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-dist
+          path: dist/
+
+      - name: Publish to PyPI (trusted publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -1,0 +1,357 @@
+emble is a code search library built for agents. It returns the exact code snippets they need instantly, using ~98% fewer tokens than grep+read and cutting latency on every step. Indexing and searching a full codebase end-to-end takes under a second, with ~200x faster indexing and ~10x faster queries than a code-specialized transformer, at 99% of its retrieval quality (see benchmarks). Everything runs on CPU with no API keys, GPU, or external services. Run it as an MCP server and any agent (Claude Code, Cursor, Codex, OpenCode, etc.) gets instant access to any repo, cloned and indexed on demand.
+
+Quickstart
+pip install semble  # Install with pip
+uv add semble       # Install with uv
+from semble import SembleIndex
+
+# Index a local directory
+index = SembleIndex.from_path("./my-project")
+
+# Index a remote git repository
+index = SembleIndex.from_git("https://github.com/MinishLab/model2vec")
+
+# Search the index with a natural-language or code query
+results = index.search("save model to disk", top_k=3)
+
+# Find code similar to a specific result
+related = index.find_related(results[0], top_k=3)
+
+# Each result exposes the matched chunk
+result = results[0]
+result.chunk.file_path   # "model2vec/model.py"
+result.chunk.start_line  # 127
+result.chunk.end_line    # 150
+result.chunk.content     # "def save_pretrained(self, path: PathLike, ..."
+Main Features
+Fast: indexes a repo in ~250 ms and answers queries in ~1.5 ms, all on CPU.
+Accurate: NDCG@10 of 0.854 on our benchmarks, on par with code-specialized transformer models, at a fraction of the size and cost.
+Token-efficient: returns only the relevant chunks, using ~98% fewer tokens than grep+read.
+Zero setup: runs on CPU with no API keys, GPU, or external services required.
+MCP server: drop-in tool for Claude Code, Cursor, Codex, OpenCode, and any other MCP-compatible agent.
+Local and remote: pass a local path or a git URL.
+MCP Server
+Semble can run as an MCP server so agents can search any codebase directly. Repos are cloned and indexed on demand, and indexes are cached for the lifetime of the session.
+
+Setup
+Requires uv to be installed.
+
+Claude Code
+claude mcp add semble -s user -- uvx --from "semble[mcp]" semble
+Codex
+Add to ~/.codex/config.toml:
+
+[mcp_servers.semble]
+command = "uvx"
+args = ["--from", "semble[mcp]", "semble"]
+OpenCode
+Add to ~/.opencode/config.json:
+
+{
+  "mcp": {
+    "semble": {
+      "type": "local",
+      "command": ["uvx", "--from", "semble[mcp]", "semble"]
+    }
+  }
+}
+Cursor
+Add to ~/.cursor/mcp.json (or .cursor/mcp.json in your project):
+
+{
+  "mcpServers": {
+    "semble": {
+      "command": "uvx",
+      "args": ["--from", "semble[mcp]", "semble"]
+    }
+  }
+}
+Tools
+Tool	Description
+search	Search a codebase with a natural-language or code query. Pass repo as a git URL or local path.
+find_related	Given a file path and line number, return chunks semantically similar to the code at that location.
+Sub-agent support
+Claude Code and Codex CLI lazy-load MCP tool schemas, so sub-agents cannot call mcp__semble__search directly. The fix is to invoke semble through the CLI via Bash instead.
+
+Claude Code: run this once in your project root:
+
+semble init
+# or, if semble is not on $PATH:
+uvx --from "semble[mcp]" semble init
+This writes .claude/agents/semble-search.md.
+
+Other tools (Codex, etc.): append the following to your AGENTS.md:
+
+## Code Search
+
+Use `semble search` to find code by describing what it does or naming a symbol/identifier, instead of grep:
+
+​```bash
+semble search "authentication flow" ./my-project
+semble search "save_pretrained" ./my-project
+semble search "save model to disk" ./my-project --top-k 10
+​```
+
+Use `semble find-related` to discover code similar to a known location (pass `file_path` and `line` from a prior search result):
+
+​```bash
+semble find-related src/auth.py 42 ./my-project
+​```
+
+`path` defaults to the current directory when omitted; git URLs are accepted.
+
+If `semble` is not on `$PATH`, use `uvx --from "semble[mcp]" semble` in its place.
+
+## Workflow
+
+1. Start with `semble search` to find relevant chunks.
+2. Inspect full files only when the returned chunk is not enough context.
+3. Optionally use `semble find-related` with a promising result's `file_path` and `line` to discover related implementations.
+4. Use grep only when you need exhaustive literal matches or quick confirmation of an exact string.
+CLI
+Semble also ships as a standalone CLI for use outside of MCP. This is useful in scripts, sub-agents, or anywhere you want search results without an MCP session.
+
+# Search a local repo
+semble search "authentication flow" ./my-project
+
+# Search for a symbol or identifier
+semble search "save_pretrained" ./my-project
+
+# Search a remote repo (cloned on demand)
+semble search "save model to disk" https://github.com/MinishLab/model2vec
+
+# Find code similar to a known location (file_path and line from a prior search result)
+semble find-related src/auth.py 42 ./my-project
+path defaults to the current directory when omitted; git URLs are accepted.
+
+If semble is not on $PATH, use uvx --from "semble[mcp]" semble in its place.
+
+How it works
+Semble splits each file into code-aware chunks using Chonkie, then scores every query against the chunks with two complementary retrievers: static Model2Vec embeddings using the code-specialized potion-code-16M model for semantic similarity, and BM25 for lexical matches on identifiers and API names. The two score lists are fused with Reciprocal Rank Fusion (RRF).
+
+After fusing, results are reranked with a set of code-aware signals:
+
+Ranking signals
+Because the embedding model is static with no transformer forward pass at query time, all of this runs in milliseconds on CPU.
+
+Benchmarks
+We benchmark quality and speed across all methods on ~1,250 queries over 63 repositories in 19 languages. The x-axis is total latency (index + first query); the y-axis is NDCG@10. Marker size reflects model parameter count.
+
+Speed vs quality
+
+Method	NDCG@10	Index time	Query p50
+CodeRankEmbed Hybrid	0.862	57 s	16 ms
+semble	0.854	263 ms	1.5 ms
+CodeRankEmbed	0.765	57 s	16 ms
+ColGREP	0.693	5.8 s	124 ms
+BM25	0.673	263 ms	0.02 ms
+grepai	0.561	35 s	48 ms
+probe	0.387	—	207 ms
+ripgrep	0.126	—	12 ms
+Semble achieves 99% of the performance of the 137M-parameter CodeRankEmbed Hybrid, while indexing 218x faster and answering queries 11x faster. See benchmarks for per-language results, ablations, and methodology.
+
+Token efficiency
+Agents using grep+read spend most of their context budget on irrelevant code. Semble returns only the chunks that match, keeping token usage low even at high recall.
+
+Token efficiency: recall vs. retrieved tokens
+
+Semble uses 98% fewer tokens on average, and reaches 94% recall at a budget of only 2k tokens, while grep+read needs a full 100k context window to reach 85%. See benchmarks for details.
+
+Semble
+Semble is a code search library built for agents. It returns the exact code snippets they need instantly, using ~98% fewer tokens than grep+read and cutting latency on every step. Indexing and searching a full codebase end-to-end takes under a second, with ~200x faster indexing and ~10x faster queries than a code-specialized transformer, at 99% of its retrieval quality (see benchmarks). Everything runs on CPU with no API keys, GPU, or external services.
+
+Run it as an MCP server and any agent (Claude Code, Cursor, Codex, OpenCode, etc.) gets instant access to any repo, cloned and indexed on demand.
+
+Quick Start
+Install Semble:
+
+Terminal window
+pip install semble  # Install with pip
+uv add semble       # Install with uv
+
+Index a repo and search it:
+
+from semble import SembleIndex
+
+# Index a local directory
+index = SembleIndex.from_path("./my-project")
+
+# Index a remote git repository
+index = SembleIndex.from_git("https://github.com/MinishLab/model2vec")
+
+# Search with a natural-language or code query
+results = index.search("save model to disk", top_k=3)
+
+# Find code similar to a specific result
+related = index.find_related(results[0], top_k=3)
+
+# Each result exposes the matched chunk
+result = results[0]
+result.chunk.file_path   # "model2vec/model.py"
+result.chunk.start_line  # 127
+result.chunk.end_line    # 150
+result.chunk.content     # "def save_pretrained(self, path: PathLike, ..."
+
+Main Features
+Fast: indexes a repo in ~250 ms and answers queries in ~1.5 ms, all on CPU.
+Accurate: NDCG@10 of 0.854 on the benchmarks, on par with code-specialized transformer models at a fraction of the size and cost.
+Local and remote: pass a local path or a git URL; indexes are cached for the session.
+MCP server: drop-in tool for Claude Code, Cursor, Codex, OpenCode, and any other MCP-compatible agent.
+Zero setup: runs on CPU with no API keys, GPU, or external services required.
+How It Works
+Semble splits each file into code-aware chunks using Chonkie, then scores every query with two complementary retrievers:
+
+Semantic: static Model2Vec embeddings from the code-specialized potion-code-16M model.
+Lexical: BM25 for exact matches on identifiers and API names.
+The two score lists are fused with Reciprocal Rank Fusion (RRF) and then reranked with a set of code-aware signals:
+
+Adaptive weighting: symbol-like queries (Foo::bar, getUserById) get more lexical weight; natural-language queries stay balanced.
+Definition boosts: a chunk that defines the queried symbol (class, def, func) ranks above chunks that merely reference it.
+Identifier stems: query tokens are stemmed and matched against identifier stems, so parse config boosts chunks containing parseConfig, ConfigParser, or config_parser.
+File coherence: when multiple chunks from the same file match, the file is boosted so the top result reflects broad file-level relevance.
+Noise penalties: test files, compat/legacy shims, example code, and .d.ts stubs are down-ranked so canonical implementations surface first.
+Because the embedding model is static with no transformer forward pass at query time, all of this runs in milliseconds on CPU.
+
+Usage
+Indexing
+Create an index from a local directory or a remote git repository:
+
+from semble import SembleIndex
+
+# Index a local directory
+index = SembleIndex.from_path("./my-project")
+
+# Index a remote git repository (cloned and cached locally)
+index = SembleIndex.from_git("https://github.com/MinishLab/model2vec")
+
+Indexing a full repo typically takes under 300 ms. Remote repos are cloned on first use and cached for the lifetime of the process.
+
+Advanced options
+Both from_path and from_git accept optional parameters to control what gets indexed:
+
+index = SembleIndex.from_path(
+    "./my-project",
+    extensions=frozenset({".py", ".ts"}),        # only index these file types
+    ignore=frozenset({"dist", "node_modules"}),  # skip these directories
+    include_text_files=True,                     # also index .md, .yaml, .json, etc.
+)
+
+from_git additionally accepts a ref parameter to check out a specific branch or tag:
+
+index = SembleIndex.from_git(
+    "https://github.com/MinishLab/model2vec",
+    ref="v2.0.0",  # branch or tag; defaults to the remote HEAD
+)
+
+Searching
+Search the index with a natural-language description or a code snippet:
+
+results = index.search("save model to disk", top_k=5)
+
+for result in results:
+    print(result.chunk.file_path, result.chunk.start_line)
+    print(result.chunk.content)
+    print()
+
+Filtering
+Restrict results to specific languages or files using filter_languages and filter_paths:
+
+# Only return results from Python files
+results = index.search("parse config", filter_languages=["python"])
+
+# Only return results from specific files
+results = index.search("parse config", filter_paths=["src/config.py", "src/settings.py"])
+
+Finding Related Code
+Given any search result, find other chunks that are semantically similar to it:
+
+results = index.search("tokenizer encode", top_k=1)
+related = index.find_related(results[0], top_k=5)
+
+for r in related:
+    print(r.chunk.file_path, r.chunk.start_line)
+
+This is useful for exploring implementations. Start from one function and surface the code that uses or resembles it.
+
+Search Modes
+The mode parameter controls the retrieval strategy:
+
+# Default: hybrid (BM25 + semantic, recommended)
+results = index.search("parse config", mode="hybrid")
+
+# Semantic only (best for natural-language queries)
+results = index.search("parse config", mode="semantic")
+
+# Lexical only (best for exact identifier lookups)
+results = index.search("parse_config", mode="bm25")
+
+Result Fields
+Each result object exposes:
+
+result = results[0]
+
+result.score              # float, relevance score
+result.chunk.file_path    # "src/config.py"
+result.chunk.start_line   # 42
+result.chunk.end_line     # 67
+result.chunk.content      # raw source code of the chunk
+
+Index Stats
+Inspect the state of an index with the stats property:
+
+stats = index.stats
+
+stats.indexed_files   # number of files indexed
+stats.total_chunks    # total number of chunks
+stats.languages       # dict mapping language name to chunk count
+                      # e.g. {"python": 412, "typescript": 88}
+
+MCP Server
+Semble can run as an MCP server so agents can search any codebase directly. Repos are cloned and indexed on demand, and indexes are cached for the lifetime of the session.
+
+Requires uv to be installed.
+
+Setup
+Claude Code
+Terminal window
+claude mcp add semble -s user -- uvx --from "semble[mcp]" semble
+
+OpenCode
+Add to ~/.opencode/config.json:
+
+{
+  "mcp": {
+    "semble": {
+      "type": "local",
+      "command": ["uvx", "--from", "semble[mcp]", "semble"]
+    }
+  }
+}
+
+Cursor
+Add to ~/.cursor/mcp.json (or .cursor/mcp.json in your project):
+
+{
+  "mcpServers": {
+    "semble": {
+      "command": "uvx",
+      "args": ["--from", "semble[mcp]", "semble"]
+    }
+  }
+}
+
+Codex
+Add to ~/.codex/config.toml:
+
+[mcp_servers.semble]
+command = "uvx"
+args = ["--from", "semble[mcp]", "semble"]
+
+Tools
+Once connected, the agent has access to two tools:
+
+Tool	Description
+search	Search a codebase with a natural-language or code query. Pass repo as a git URL or local path to index it on demand.
+find_related	Given a file_path and line number from a prior search result, return chunks semantically similar to the code at that location.
+Both tools accept a repo parameter (git URL or local path). The index is built on the first call and reused for subsequent calls in the same session.
+

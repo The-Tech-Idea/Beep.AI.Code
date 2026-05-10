@@ -1,0 +1,45 @@
+{
+  "agent_id": "code-reviewer",
+  "bundle_reference": "code-reviewer.beep-agent.json",
+  "declared_runner_kinds": [
+    "local"
+  ],
+  "endpoint_path": "/ai-middleware/api/agents/bundles/import",
+  "expected_execution_target": "local_pc",
+  "overwrite": false,
+  "server_url": "http://localhost:8000",
+  "shared_release_metadata": {
+    "agent_id": "code-reviewer",
+    "agent_name": "Code Reviewer",
+    "bundle_file": "code-reviewer.beep-agent.json",
+    "bundle_schema_version": 1,
+    "bundle_version": "1.0.0",
+    "compatibility": {
+      "max_cli_version": "",
+      "min_cli_version": "__CLI_VERSION__",
+      "sdk_contract_versions": [],
+      "server_contract_versions": []
+    },
+    "description": "Review code changes.",
+    "distribution_name": "beep-agent-code-reviewer",
+    "provenance": {
+      "authoring_tool": "beep-ai-code",
+      "authoring_tool_version": "__CLI_VERSION__",
+      "channel_annotations": {},
+      "created_at": "2026-05-08T12:00:00+00:00",
+      "created_by": "",
+      "publisher": "",
+      "source_repository": "",
+      "source_revision": ""
+    },
+    "release_name": "Code Reviewer v1.0.0",
+    "runner_kinds": [
+      "local"
+    ],
+    "tag_name": "beep-agent-code-reviewer-v1.0.0"
+  },
+  "warnings": [
+    "Bundle does not declare a Beep.AI.Server runner kind; server import is expected to keep execution_target as local_pc.",
+    "Bundle does not declare compatibility.server_contract_versions; the server will treat schema_version=1 as legacy-compatible."
+  ]
+}

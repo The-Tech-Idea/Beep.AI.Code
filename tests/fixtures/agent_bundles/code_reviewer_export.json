@@ -1,0 +1,71 @@
+{
+  "agent_id": "code-reviewer",
+  "assets": [],
+  "bundle_version": "1.0.0",
+  "compatibility": {
+    "max_cli_version": "",
+    "min_cli_version": "__CLI_VERSION__",
+    "sdk_contract_versions": [],
+    "server_contract_versions": []
+  },
+  "data_source_ids": [],
+  "description": "Review code changes.",
+  "enabled": true,
+  "framework": "langgraph",
+  "guardrails_profile": "balanced",
+  "kind": "beep-agent-bundle",
+  "mcp_server_ids": [
+    "github"
+  ],
+  "metadata": {
+    "project_id": 17
+  },
+  "model": {
+    "base_url": "https://openrouter.ai/api",
+    "max_tokens": 4096,
+    "model_id": "anthropic/claude-sonnet-4",
+    "provider_key": "openrouter",
+    "provider_options": {
+      "parallel_tool_calls": false,
+      "reasoning": {
+        "effort": "high"
+      }
+    },
+    "stop_sequences": [],
+    "temperature": 0.7,
+    "top_p": 1.0
+  },
+  "name": "Code Reviewer",
+  "provenance": {
+    "authoring_tool": "beep-ai-code",
+    "authoring_tool_version": "__CLI_VERSION__",
+    "channel_annotations": {},
+    "created_at": "2026-05-08T12:00:00+00:00",
+    "created_by": "",
+    "publisher": "",
+    "source_repository": "",
+    "source_revision": ""
+  },
+  "runtime": {
+    "managed_agent_runtime": true,
+    "optional_capabilities": [],
+    "python": ">=3.11",
+    "required_capabilities": [],
+    "supported_runner_kinds": [
+      "local"
+    ]
+  },
+  "schema_version": 1,
+  "system_prompt": "",
+  "tags": [
+    "review"
+  ],
+  "template_id": "",
+  "tool_policy": {
+    "allow_builtin_tools": true,
+    "allow_mcp_tools": true,
+    "allowed_categories": [],
+    "blocked_tools": [],
+    "max_tool_calls_per_turn": 10
+  }
+}

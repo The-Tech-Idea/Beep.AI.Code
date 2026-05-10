@@ -1,0 +1,42 @@
+{
+  "author": "Beep.AI Team",
+  "beepAgentBundle": {
+    "agentId": "code-reviewer",
+    "bundlePath": "bundle/code-reviewer.beep-agent.json",
+    "releaseMetadataPath": "release-metadata.json",
+    "schemaVersion": 1
+  },
+  "dependencies": {
+    "beep-ai-sdk": "^1.0.0"
+  },
+  "description": "Review code changes.",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "exports": {
+    ".": {
+      "default": "./index.cjs"
+    }
+  },
+  "files": [
+    "README.md",
+    "release-metadata.json",
+    "index.cjs",
+    "bundle/code-reviewer.beep-agent.json"
+  ],
+  "keywords": [
+    "beep-ai",
+    "portable-agent",
+    "agent-bundle",
+    "review"
+  ],
+  "license": "MIT",
+  "main": "index.cjs",
+  "name": "beep-agent-code-reviewer",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "type": "commonjs",
+  "version": "1.0.0"
+}

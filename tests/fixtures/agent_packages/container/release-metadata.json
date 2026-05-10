@@ -1,0 +1,40 @@
+{
+  "channel": "container",
+  "channel_metadata": {
+    "base_image": "python:3.11-slim",
+    "bundle_path": "bundle/code-reviewer.beep-agent.json",
+    "entrypoint_path": "entrypoint.sh",
+    "image_reference": "beep-agent-code-reviewer:1.0.0"
+  },
+  "output_kind": "local-package",
+  "shared_release_metadata": {
+    "agent_id": "code-reviewer",
+    "agent_name": "Code Reviewer",
+    "bundle_file": "code-reviewer.beep-agent.json",
+    "bundle_schema_version": 1,
+    "bundle_version": "1.0.0",
+    "compatibility": {
+      "max_cli_version": "",
+      "min_cli_version": "__CLI_VERSION__",
+      "sdk_contract_versions": [],
+      "server_contract_versions": []
+    },
+    "description": "Review code changes.",
+    "distribution_name": "beep-agent-code-reviewer",
+    "provenance": {
+      "authoring_tool": "beep-ai-code",
+      "authoring_tool_version": "__CLI_VERSION__",
+      "channel_annotations": {},
+      "created_at": "2026-05-08T12:00:00+00:00",
+      "created_by": "",
+      "publisher": "",
+      "source_repository": "",
+      "source_revision": ""
+    },
+    "release_name": "Code Reviewer v1.0.0",
+    "runner_kinds": [
+      "local"
+    ],
+    "tag_name": "beep-agent-code-reviewer-v1.0.0"
+  }
+}

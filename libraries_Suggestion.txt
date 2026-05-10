@@ -1,0 +1,604 @@
+Yes — but there is **no single Python library** that gives you “Claude Code/Codex clone” out of the box. You want a **stack of focused libraries**.
+
+For your current project, I would not rewrite everything around a big framework. I would keep your existing `beep` architecture and add selected libraries where they solve real problems.
+
+## My recommended Python stack for your agent
+
+| Area                     | Best library choices                                     | Why                                                                 |
+| ------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------- |
+| Agent orchestration      | **LangGraph**, **OpenAI Agents SDK**, or **Pydantic AI** | Agent loop, tools, state, retries, streaming, handoffs              |
+| MCP                      | **mcp** Python SDK                                       | Standard MCP client/server support                                  |
+| Structured models        | **pydantic**                                             | Tool schemas, structured errors, validation                         |
+| Multi-language parsing   | **tree-sitter**                                          | Parse many programming languages                                    |
+| Python-safe code editing | **LibCST**                                               | Refactor Python while preserving formatting/comments                |
+| Python lint/format       | **ruff**                                                 | Fast linting/formatting, many rules                                 |
+| Architecture enforcement | **import-linter**                                        | Enforce layer boundaries like domain → application → infrastructure |
+| Tests                    | **pytest**, **pytest-cov**, **hypothesis**               | Test execution, coverage, generated/property tests                  |
+| Memory/vector DB         | **Qdrant**, **Chroma**, or **LanceDB**                   | Persistent semantic memory                                          |
+| Git/diff                 | **GitPython**, **unidiff**, **diff-match-patch**         | Track changes, inspect diffs, apply patches                         |
+| CLI/UI                   | **Typer**, **Rich**, **Textual**                         | Agent CLI, progress display, review screens                         |
+
+---
+
+# 1. Agent orchestration
+
+Since you already have your own agent loop, you have three good choices.
+
+## Option A — Keep your own loop + use Pydantic
+
+This is my recommendation for you.
+
+You already have:
+
+```text id="zz7hx6"
+beep/chat/prompts.py
+beep/mcp/client.py
+beep/testrunner/runner.py
+AgentMemory
+Semble semantic search
+```
+
+So you can add:
+
+```bash id="c15mrc"
+pip install pydantic
+```
+
+Use Pydantic for:
+
+```text id="2zpoe1"
+ToolResult
+StructuredToolError
+AgentState
+ValidationResult
+ProjectProfile
+LanguageAdapter metadata
+```
+
+This keeps your framework yours.
+
+---
+
+## Option B — LangGraph
+
+Use **LangGraph** if you want a graph-based agent loop with durable execution, streaming, human-in-the-loop, and stateful workflows. The LangGraph docs describe it as focused on durable execution, streaming, human-in-the-loop, and agent orchestration. ([LangChain Docs][1])
+
+Good for:
+
+```text id="0ynp4f"
+planner node
+context node
+tool execution node
+validation node
+repair node
+final node
+```
+
+Example structure:
+
+```text id="7iaxix"
+TaskInput
+  → ContextNode
+  → PlanNode
+  → ToolNode
+  → ValidateNode
+  → RepairNode
+  → FinalNode
+```
+
+Use it if your loop is becoming hard to manage manually.
+
+---
+
+## Option C — OpenAI Agents SDK
+
+The OpenAI Agents SDK is designed for building agents that plan, call tools, collaborate across specialists, and keep enough state for multi-step work. ([OpenAI Developers][2]) The Python SDK repository describes it as a lightweight framework for multi-agent workflows and provider-agnostic usage. ([GitHub][3])
+
+Use it if you want:
+
+```text id="dybsml"
+built-in agent abstraction
+tool calls
+handoffs/subagents
+tracing
+sandbox direction
+OpenAI-native workflow
+```
+
+For your case, I would use it only if you want closer alignment with Codex-style architecture.
+
+---
+
+## Option D — Pydantic AI
+
+Pydantic AI’s docs describe agents as the primary interface for interacting with LLMs, and its design is strongly tied to typed Python models. ([Pydantic][4])
+
+Use it if you want:
+
+```text id="gxm4n2"
+strong typing
+structured outputs
+tool schemas
+clean Python developer experience
+less framework complexity than LangGraph
+```
+
+For your project, **Pydantic AI is attractive**, but I still think your existing custom loop plus Pydantic models may be better.
+
+---
+
+# 2. MCP support
+
+You already implemented MCP, but the official **MCP Python SDK** is still worth using or comparing against. MCP is described as a way to expose data and functionality to LLM applications in a secure, standardized way. ([GitHub][5])
+
+Install:
+
+```bash id="90j04f"
+pip install mcp
+```
+
+Use it for:
+
+```text id="o8qrql"
+tool discovery
+MCP client
+MCP server support
+tool schemas
+standard compatibility
+```
+
+Important: for a coding agent, MCP needs strict command/path guards. Do not let arbitrary MCP tools execute shell operations without your permission layer.
+
+---
+
+# 3. Multi-language code parsing
+
+Use **tree-sitter**.
+
+Tree-sitter can build concrete syntax trees for source files and supports incremental parsing. ([tree-sitter.github.io][6]) The Python bindings are available through `tree-sitter`. ([tree-sitter.github.io][7])
+
+Install:
+
+```bash id="qyw79p"
+pip install tree-sitter tree-sitter-language-pack
+```
+
+Use it for:
+
+```text id="ybbbio"
+symbol extraction
+function/class detection
+imports
+changed-code analysis
+context selection
+language-aware search
+```
+
+Suggested module:
+
+```text id="pbknk6"
+beep/codeindex/
+  parser.py
+  symbols.py
+  languages.py
+```
+
+Example abstraction:
+
+```python id="3vo2jq"
+from dataclasses import dataclass
+
+
+@dataclass
+class CodeSymbol:
+    name: str
+    kind: str
+    file_path: str
+    start_line: int
+    end_line: int
+
+
+class CodeParser:
+    def parse_symbols(self, file_path: str, source: str) -> list[CodeSymbol]:
+        ...
+```
+
+Tree-sitter is the best library for **multi-language code understanding**.
+
+---
+
+# 4. Python code editing/refactoring
+
+Use **LibCST** for Python-specific edits.
+
+LibCST parses Python into a concrete syntax tree that preserves formatting details like comments, whitespace, and parentheses. ([libcst.readthedocs.io][8]) Its codemod framework is specifically designed for automated refactors across large codebases. ([libcst.readthedocs.io][9])
+
+Install:
+
+```bash id="fb4sw5"
+pip install libcst
+```
+
+Use it for:
+
+```text id="ruaxum"
+safe imports editing
+renaming functions/classes
+adding methods
+changing function signatures
+moving code
+automated refactors
+```
+
+For example, if the agent wants to add an import, avoid string hacks. Use LibCST.
+
+```python id="03374k"
+import libcst as cst
+from libcst import codemod
+
+
+class AddImportTransformer(cst.CSTTransformer):
+    def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
+        new_import = cst.SimpleStatementLine(
+            body=[
+                cst.ImportFrom(
+                    module=cst.Name("typing"),
+                    names=[cst.ImportAlias(cst.Name("Protocol"))],
+                )
+            ]
+        )
+
+        return updated_node.with_changes(
+            body=[new_import, *updated_node.body]
+        )
+```
+
+For Python code, **LibCST is better than raw text edits**.
+
+---
+
+# 5. Clean Code and architecture enforcement
+
+Use **Ruff** and **Import Linter**.
+
+Ruff is a Python linter and formatter with `pyproject.toml` support, automatic fixes, built-in caching, and many built-in rules. ([Astral Docs][10])
+
+Install:
+
+```bash id="z86hym"
+pip install ruff
+```
+
+Use:
+
+```bash id="alwr52"
+ruff check .
+ruff format .
+```
+
+For DDD/Clean Architecture, use **import-linter**.
+
+Import Linter lets you impose constraints on imports between Python modules, which is exactly what you need for enforcing layers. ([import-linter.readthedocs.io][11]) It supports forbidden contracts, such as preventing one module group from importing another. ([import-linter.readthedocs.io][12])
+
+Install:
+
+```bash id="bct7pz"
+pip install import-linter
+```
+
+Example `.importlinter`:
+
+```ini id="8q654z"
+[importlinter]
+root_package = my_app
+
+[importlinter:contract:domain_must_not_import_infrastructure]
+name = Domain must not import infrastructure
+type = forbidden
+source_modules =
+    my_app.domain
+forbidden_modules =
+    my_app.infrastructure
+    my_app.presentation
+
+[importlinter:contract:application_must_not_import_presentation]
+name = Application must not import presentation
+type = forbidden
+source_modules =
+    my_app.application
+forbidden_modules =
+    my_app.presentation
+```
+
+Then your agent can run:
+
+```bash id="wwa6ef"
+lint-imports
+```
+
+This is very useful for your goal: **clean code + domain services + layered architecture**.
+
+---
+
+# 6. Testing tools
+
+Use:
+
+```bash id="urndlu"
+pip install pytest pytest-cov hypothesis
+```
+
+Recommended use:
+
+| Tool         | Purpose                                  |
+| ------------ | ---------------------------------------- |
+| `pytest`     | Main test runner                         |
+| `pytest-cov` | Coverage reports                         |
+| `hypothesis` | Property-based/generated edge-case tests |
+
+For your agent, add a dedicated tool:
+
+```text id="asr7s4"
+generate_tests
+```
+
+But underneath, it should use:
+
+```text id="5nyeyi"
+pytest discovery
+existing test style detection
+pytest execution
+coverage parsing
+```
+
+The agent should not just “write tests”; it should:
+
+```text id="94iz3l"
+inspect existing tests
+detect framework
+generate test file
+run pytest
+repair failing tests
+summarize coverage/behavior
+```
+
+---
+
+# 7. Persistent memory / vector DB
+
+Since you already use Semble, you do not have to rush this. But if you want persistent vector memory:
+
+## Best local-first choices
+
+| Library     | Best for                                                          |
+| ----------- | ----------------------------------------------------------------- |
+| **Chroma**  | Simple local vector DB for RAG/prototypes                         |
+| **Qdrant**  | Strong production-ready vector search, local or server            |
+| **LanceDB** | Local-first embedded vector store, good for code/document indexes |
+
+Chroma’s docs describe it as retrieval infrastructure with embeddings, metadata filtering, dense/sparse search, and retrieval. ([Chroma Docs][13]) Qdrant’s Python client supports sync and async requests to Qdrant. ([Qdrant Python Client][14]) LanceDB’s Python API supports sync and async connections for creating/opening tables and querying/modifying data. ([LanceDB][15])
+
+My recommendation:
+
+```text id="sjjnqd"
+Use Chroma for fastest prototype.
+Use Qdrant if you want production/server mode.
+Use LanceDB if you want embedded local project indexes.
+```
+
+For your coding agent, I would pick **LanceDB** or **Qdrant local mode**.
+
+---
+
+# 8. Git, diffs, and patching
+
+Use:
+
+```bash id="9ne9ja"
+pip install GitPython unidiff diff-match-patch
+```
+
+Use these for:
+
+```text id="feu53s"
+git status
+changed files
+diff summaries
+patch parsing
+rollback decisions
+final change report
+```
+
+Suggested module:
+
+```text id="4oeo1r"
+beep/editing/
+  diff.py
+  patch.py
+  transaction.py
+```
+
+Your agent should always know:
+
+```text id="y43ff8"
+what files changed
+what lines changed
+whether changes are staged
+whether validation passed after changes
+```
+
+---
+
+# 9. CLI experience
+
+Use:
+
+```bash id="ki13zp"
+pip install typer rich textual
+```
+
+| Library   | Use                                   |
+| --------- | ------------------------------------- |
+| `typer`   | CLI commands                          |
+| `rich`    | colored output, tables, progress      |
+| `textual` | terminal UI for approving diffs/tools |
+
+This matters because a coding agent needs good UX:
+
+```text id="8qs5yw"
+approve tool call
+show diff
+show running command
+show test result
+show final summary
+```
+
+---
+
+# 10. Security and static analysis
+
+Use:
+
+```bash id="v3najt"
+pip install bandit semgrep
+```
+
+Use:
+
+| Tool      | Purpose                                       |
+| --------- | --------------------------------------------- |
+| `bandit`  | Python security checks                        |
+| `semgrep` | Multi-language static analysis/security rules |
+
+For architecture quality:
+
+```bash id="46fw2c"
+pip install radon vulture
+```
+
+| Tool      | Purpose               |
+| --------- | --------------------- |
+| `radon`   | complexity metrics    |
+| `vulture` | unused code detection |
+
+These should be optional, not always-on.
+
+---
+
+# My exact recommendation for your project
+
+Because you already built many core parts, I would use this stack:
+
+```bash id="8klang"
+pip install pydantic rich typer tree-sitter tree-sitter-language-pack libcst ruff import-linter pytest pytest-cov hypothesis GitPython unidiff diff-match-patch lancedb
+```
+
+Then later, optionally:
+
+```bash id="ox1enk"
+pip install langgraph
+```
+
+Only add LangGraph if your manual loop gets too complex.
+
+---
+
+# Best architecture for your `beep` project
+
+```text id="slp03c"
+beep/
+  agent/
+    loop.py
+    state.py
+    executor.py
+
+  models/
+    tool_result.py
+    errors.py
+    project.py
+
+  languages/
+    registry.py
+    base.py
+    python.py
+    csharp.py
+    javascript.py
+
+  codeindex/
+    tree_sitter_index.py
+    symbols.py
+    repo_map.py
+
+  editing/
+    transaction.py
+    diff.py
+    libcst_tools.py
+
+  standards/
+    loader.py
+    clean_code.md
+    ddd.md
+    python.md
+    architecture.md
+
+  validation/
+    validator.py
+    ruff_validator.py
+    import_linter_validator.py
+    pytest_validator.py
+
+  memory/
+    project_memory.py
+    vector_memory.py
+
+  cli/
+    main.py
+```
+
+---
+
+# The most important libraries for your goal
+
+For your specific goal — **best coding agent with Clean Code, DDD, domain services, and multi-language support** — prioritize these:
+
+```text id="xegsgj"
+1. pydantic
+2. tree-sitter
+3. libcst
+4. ruff
+5. import-linter
+6. pytest
+7. GitPython + unidiff
+8. LanceDB or Qdrant
+9. rich + typer
+10. LangGraph only if needed
+```
+
+The most valuable combination is:
+
+```text id="5w4xxu"
+tree-sitter → understand code
+LibCST → safely edit Python
+ruff → enforce clean Python style
+import-linter → enforce architecture boundaries
+pytest → validate behavior
+pydantic → make tools/errors reliable
+```
+
+That stack will help your agent behave like a serious coding assistant instead of just an LLM with file access.
+
+[1]: https://docs.langchain.com/oss/python/langgraph/overview?utm_source=chatgpt.com "LangGraph overview - Docs by LangChain"
+[2]: https://developers.openai.com/api/docs/guides/agents?utm_source=chatgpt.com "Agents SDK | OpenAI API"
+[3]: https://github.com/openai/openai-agents-python?utm_source=chatgpt.com "OpenAI Agents SDK PyPI"
+[4]: https://pydantic.dev/docs/ai/core-concepts/agent/?utm_source=chatgpt.com "Agents | Pydantic Docs"
+[5]: https://github.com/modelcontextprotocol/python-sdk?utm_source=chatgpt.com "MCP Python SDK"
+[6]: https://tree-sitter.github.io/?utm_source=chatgpt.com "Tree-sitter: Introduction"
+[7]: https://tree-sitter.github.io/py-tree-sitter/?utm_source=chatgpt.com "py-tree-sitter 0.25.2 documentation"
+[8]: https://libcst.readthedocs.io/?utm_source=chatgpt.com "LibCST — LibCST documentation"
+[9]: https://libcst.readthedocs.io/en/latest/codemods.html?utm_source=chatgpt.com "Codemods — LibCST documentation"
+[10]: https://docs.astral.sh/ruff/?utm_source=chatgpt.com "Ruff"
+[11]: https://import-linter.readthedocs.io/?utm_source=chatgpt.com "Import Linter - Read the Docs"
+[12]: https://import-linter.readthedocs.io/en/v1.2.1/contract_types.html?utm_source=chatgpt.com "Contract types — Import Linter 1.2.1 documentation"
+[13]: https://docs.trychroma.com/docs/overview/introduction?utm_source=chatgpt.com "Introduction - Chroma Docs"
+[14]: https://python-client.qdrant.tech/?utm_source=chatgpt.com "Qdrant Python Client Documentation — Qdrant Client ..."
+[15]: https://lancedb.github.io/lancedb/python/python/?utm_source=chatgpt.com "Python - LanceDB"
