@@ -32,6 +32,10 @@ def render_status(
         except Exception as exc:
             console.print(f"[red]Connection failed: {exc}[/red]")
             raise typer.Exit(1)
+        try:
+            capabilities = asyncio.run(client.get_capabilities())
+        except Exception:
+            capabilities = None
         finally:
             try:
                 asyncio.run(client.close())
@@ -48,6 +52,20 @@ def render_status(
         ],
         show_model_tiers=False,
     )
+    if capabilities and capabilities.is_beep_server():
+        cap_map = capabilities.capability_map()
+        enabled = [k for k, v in cap_map.items() if v]
+        missing = [k for k, v in cap_map.items() if not v]
+        render_key_value_table(
+            title="Server Capabilities",
+            key_header="Capability",
+            value_header="Status",
+            rows=[
+                *[(f"[green]{c}[/green]", "[green]Enabled[/green]") for c in sorted(enabled)],
+                *[(f"[dim]{c}[/dim]", "[dim]Not available[/dim]") for c in sorted(missing)],
+            ],
+            console=console,
+        )
 
 
 def render_config(*, config: Any, config_file: Any, console: Console) -> None:
@@ -246,7 +264,9 @@ def run_agent_dispatch(
         return
     if action == "package":
         if not extra:
-            console.print("[yellow]Usage: beep agent package <bundle_file_or_id> [options][/yellow]")
+            console.print(
+                "[yellow]Usage: beep agent package <bundle_file_or_id> [options][/yellow]"
+            )
             raise typer.Exit(2)
         run_agent_package_from_argv(extra)
         return

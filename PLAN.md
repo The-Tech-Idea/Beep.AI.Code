@@ -607,7 +607,7 @@ Added auto-prompt setup wizard when client is not configured:
 **Enhanced Wizard:**
 - 3-step flow: Server URL → API Token → Default Model
 - Tests server connection before saving
-- Tests token validity via `/ai-middleware/api/tokens/check`
+- Tests token validity via `/v1/api/tokens/check`
 - Shows app name and scopes on successful validation
 - Masks existing token with option to change
 - Auto-adds `http://` prefix if missing

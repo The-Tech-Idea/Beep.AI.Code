@@ -7,12 +7,53 @@ from typing import TYPE_CHECKING, Any
 
 from rich.prompt import Prompt
 
+from beep.chat.mode_state import AgentMode
 from beep.chat.session_runtime_state import get_session_mcp_runtime
+from beep.utils.console import get_console
 from beep.workspace.editing import prepare_workspace_edit
 from beep.workspace.file_ops import apply_edit
-from beep.utils.console import get_console
+
+
+async def _load_agent_roster(session: Any, console: Any) -> None:
+    """Load the agent roster from the server if a profile exists."""
+    try:
+        from beep.profiles import has_saved_profile
+        if not has_saved_profile():
+            return
+
+        from beep.profiles.agent_roster import get_agent_roster
+        roster = get_agent_roster()
+        if roster.active is not None:
+            return  # Already loaded
+
+        from beep.profiles import load_active_profile
+        profile = load_active_profile()
+        if profile is None:
+            return
+
+        config = getattr(session, "_config", None)
+        api_token = getattr(config, "api_token", None) if config else None
+
+        await roster.load_from_server(session._client, api_token)
+
+        if roster.active:
+            console.print(
+                f"[dim]🤖 Agent roster loaded: {len(roster.list_agents())} agents available. "
+                f"Active: [bold]{roster.active.display_name}[/bold][/dim]"
+            )
+            console.print("[dim]Type /agents to see all, /agent <name> to switch.[/dim]")
+    except ImportError:
+        pass
+    except Exception:
+        pass  # Don't block REPL startup for roster issues
+
 
 if TYPE_CHECKING:
+    pass
+
+if TYPE_CHECKING:
+    from rich.console import Console
+
     from beep.chat.repl import ChatSession
 
 
@@ -39,6 +80,7 @@ def _handle_memory_after_turn(session: ChatSession, console: Console) -> None:
     # Auto-compact runs in the background — fire-and-forget (sync trim only to
     # keep the turn latency zero; the user can /compact for LLM summarization).
     import asyncio
+
     from beep.sessions.compactor import compact_session
     from beep.sessions.history import HISTORY_DIR, replace_session
 
@@ -120,6 +162,16 @@ async def send(
 
     cleaned, included = session._context.resolve_mentions(user_input)
 
+    mention_guidance = ""
+    from beep.chat.mentions import build_mention_guidance, parse_mention
+
+    mention = parse_mention(user_input)
+    if mention:
+        guidance = build_mention_guidance(mention)
+        console.print(f"[dim]@{mention.subagent_type} subagent[/dim]")
+        mention_guidance = guidance
+        cleaned = mention.remainder or cleaned
+
     # Build automatic workspace context when enabled.
     auto_context_text = ""
     auto_sources: list[str] = []
@@ -141,6 +193,17 @@ async def send(
     skill_context = session._build_skill_context(cleaned)
     rules_context = build_rules_context(session._rules)
     segments = []
+    if mention_guidance:
+        segments.append(mention_guidance)
+    agent_mode = getattr(session, "_agent_mode", AgentMode.BUILD)
+    if agent_mode == AgentMode.PLAN:
+        segments.append(
+            "## MODE: PLAN (Read-Only)\n\n"
+            "You are in read-only analysis mode. "
+            "You may read files, search code, and answer questions. "
+            "You MUST NOT modify any files or run shell commands that write. "
+            "When you need to make changes, suggest them and ask the user to switch to Build mode."
+        )
     if auto_context_text:
         segments.append(auto_context_text)
     if pinned_context:
@@ -229,6 +292,9 @@ async def run(
     await session._bootstrap_workspace()
     session._show_welcome()
 
+    # ── Load agent roster from server ───────────────────────────────
+    await _load_agent_roster(session, console)
+
     while True:
         if session._edit_target:
             console.print(
@@ -247,6 +313,9 @@ async def run(
                 content = "\n".join(lines)
                 prepared_edit = prepare_workspace_edit(session._edit_target, new_content=content)
                 session._last_edit = prepared_edit.to_undo_record()
+                _capture_edit_checkpoint(
+                    session, prepared_edit.path, prepared_edit.old_content, "edit"
+                )
                 apply_edit(
                     prepared_edit.path,
                     prepared_edit.old_content,
@@ -364,3 +433,18 @@ async def handle_command(
         )
     finally:
         _print_hook_outputs(run_hooks("post_command", session.hook_config), console)
+
+
+def _capture_edit_checkpoint(
+    session: Any,
+    file_path: Path,
+    original_content: str,
+    tool_name: str,
+) -> None:
+    tl = getattr(session, "_checkpoint_timeline", None)
+    if tl is None:
+        from beep.chat.checkpoint_timeline import CheckpointTimeline
+
+        tl = CheckpointTimeline()
+        session._checkpoint_timeline = tl
+    tl.capture(file_path, original_content, tool_name)

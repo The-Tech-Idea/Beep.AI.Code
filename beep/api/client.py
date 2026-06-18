@@ -5,13 +5,13 @@ Anthropic's API or Codex CLI connects to OpenAI's API — via token-authenticate
 endpoints.
 
 External API surface (token-auth):
-- /v1/chat/completions  — OpenAI-compatible (llm:write)
-- /v1/models            — List/get models (llm:read)
-- /v1/messages          — Anthropic-compatible (llm:write)
-- /v1/responses         — OpenAI Responses API (llm:write)
-- /v1/embeddings        — Embedding generation (llm:read)
-- /ai-middleware/api/agents/bundles/import — Portable bundle registration/import (agent:*)
-- /ai-middleware/api/coding-assistant/* — Workspace/project/session bootstrap
+- /v1/chat/completions              — OpenAI-compatible (llm:write)
+- /v1/models                        — List/get models (llm:read)
+- /v1/messages                      — Anthropic-compatible (llm:write)
+- /v1/responses                     — OpenAI Responses API (llm:write)
+- /v1/embeddings                    — Embedding generation (llm:read)
+- /v1/api/agents/bundles/import     — Portable bundle registration/import (agent:*)
+- /v1/api/agent-framework/*         — Agent execution, sessions, skills, coding
 
 Internal API surface (website session auth, NOT for CLI):
 - /coding-assistant/*   — Web UI only
@@ -27,12 +27,14 @@ import httpx
 
 from beep.api.errors import BeepAPIError
 from beep.api.client_agent_bundle_support import BeepAPIClientAgentBundleMixin
+from beep.api.client_capabilities_support import BeepAPIClientCapabilitiesMixin
 from beep.api.client_llm_support import BeepAPIClientLLMMixin
 from beep.api.client_workspace_support import BeepAPIClientWorkspaceMixin
 from beep.config import BeepConfig
 
 
 class BeepAPIClient(
+    BeepAPIClientCapabilitiesMixin,
     BeepAPIClientLLMMixin,
     BeepAPIClientWorkspaceMixin,
     BeepAPIClientAgentBundleMixin,
@@ -90,7 +92,7 @@ class BeepAPIClient(
                     and status in (429, 503)
                     and attempt < max_attempts - 1
                 ):
-                    backoff = 2 ** attempt  # 1 s, 2 s, 4 s …
+                    backoff = 2**attempt  # 1 s, 2 s, 4 s …
                     await asyncio.sleep(backoff)
                     continue
                 try:

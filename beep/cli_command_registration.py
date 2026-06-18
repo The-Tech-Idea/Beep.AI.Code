@@ -45,7 +45,9 @@ SPECIAL_COMMAND_TOKENS = (
 def known_cli_command_tokens(app: typer.Typer, extra_tokens: Iterable[str] = ()) -> frozenset[str]:
     """Return the canonical set of tokens that should be treated as subcommands or CLI flags."""
     command_tokens = tuple(
-        filter(None, (_resolve_command_token(command_info) for command_info in app.registered_commands))
+        filter(
+            None, (_resolve_command_token(command_info) for command_info in app.registered_commands)
+        )
     )
     group_tokens = tuple(
         filter(None, (getattr(group_info, "name", None) for group_info in app.registered_groups))
@@ -214,6 +216,131 @@ def watch_command(
     )
 
 
+def _lazy_skills_list() -> None:
+    _invoke_lazy_command("beep.commands.skills", "skills_list_cmd")
+
+
+def _lazy_skills_add(
+    skill_id: str = typer.Argument(...),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+    allow_network: bool = typer.Option(False, "--allow-network"),
+) -> None:
+    _invoke_lazy_command(
+        "beep.commands.skills",
+        "skills_add_cmd",
+        skill_id,
+        yes,
+        allow_network,
+    )
+
+
+def _lazy_skills_remove(
+    skill_id: str = typer.Argument(...),
+) -> None:
+    _invoke_lazy_command("beep.commands.skills", "skills_remove_cmd", skill_id)
+
+
+def _lazy_skills_update(
+    skill_id: str = typer.Argument(...),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+    allow_network: bool = typer.Option(False, "--allow-network"),
+) -> None:
+    _invoke_lazy_command(
+        "beep.commands.skills",
+        "skills_update_cmd",
+        skill_id,
+        yes,
+        allow_network,
+    )
+
+
+def _lazy_skills_info(
+    skill_id: str = typer.Argument(...),
+) -> None:
+    _invoke_lazy_command("beep.commands.skills", "skills_info_cmd", skill_id)
+
+
+def catalog_command(
+    kind: str | None = typer.Option(None, "--kind", "-k"),
+    query: str | None = typer.Option(None, "--query", "-q"),
+) -> None:
+    """Browse and search the integrations catalog."""
+    _invoke_lazy_command("beep.commands.catalog", "catalog_cmd", kind=kind, query=query)
+
+
+def fanout_command(
+    goal: str = typer.Argument(...),
+    workers: int = typer.Option(2, "--workers", "-n"),
+    max_workers: int = typer.Option(4, "--max-workers"),
+) -> None:
+    """Run multiple agents in parallel across isolated git worktrees."""
+    _invoke_lazy_command(
+        "beep.commands.agent",
+        "agent_fanout_cmd",
+        goal,
+        workers,
+        max_workers,
+    )
+
+
+def git_commit_command(
+    message: str = typer.Option("", "--message", "-m"),
+    all: bool = typer.Option(False, "--all", "-a"),
+) -> None:
+    """Commit changes to git."""
+    _invoke_lazy_command(
+        "beep.commands.git",
+        "git_commit_cmd",
+        message,
+        all,
+    )
+
+
+def git_branch_command(
+    name: str = typer.Argument(...),
+    base: str | None = typer.Option(None, "--base", "-b"),
+) -> None:
+    """Create and switch to a new branch."""
+    _invoke_lazy_command(
+        "beep.commands.git",
+        "git_branch_cmd",
+        name,
+        base,
+    )
+
+
+def git_diff_command(
+    staged: bool = typer.Option(False, "--staged", "-s"),
+    file: str | None = typer.Option(None, "--file", "-f"),
+) -> None:
+    """Show git diff."""
+    _invoke_lazy_command(
+        "beep.commands.git",
+        "git_diff_cmd",
+        staged,
+        file,
+    )
+
+
+def git_status_command() -> None:
+    """Show git status."""
+    _invoke_lazy_command("beep.commands.git", "git_status_cmd")
+
+
+def init_command(
+    force: bool = typer.Option(False, "--force", "-f"),
+) -> None:
+    """Initialize Beep.AI.Code for this project."""
+    _invoke_lazy_command("beep.commands.init", "init_cmd", force)
+
+
+def web_search_command(
+    query: str = typer.Argument(...),
+) -> None:
+    """Search the web."""
+    _invoke_lazy_command("beep.commands.search", "search_cmd", query)
+
+
 TOP_LEVEL_COMMAND_REGISTRATIONS = (
     TopLevelCommandRegistration("tui", tui_command),
     TopLevelCommandRegistration("tree", tree_command),
@@ -228,6 +355,14 @@ TOP_LEVEL_COMMAND_REGISTRATIONS = (
     TopLevelCommandRegistration("doctor", doctor_command),
     TopLevelCommandRegistration("self-update", self_update_command),
     TopLevelCommandRegistration("watch", watch_command),
+    TopLevelCommandRegistration("catalog", catalog_command),
+    TopLevelCommandRegistration("fanout", fanout_command),
+    TopLevelCommandRegistration("commit", git_commit_command),
+    TopLevelCommandRegistration("branch", git_branch_command),
+    TopLevelCommandRegistration("diff", git_diff_command),
+    TopLevelCommandRegistration("vcs-status", git_status_command),
+    TopLevelCommandRegistration("init", init_command),
+    TopLevelCommandRegistration("search", web_search_command),
 )
 
 GROUP_COMMAND_REGISTRATIONS = (
@@ -239,7 +374,11 @@ GROUP_COMMAND_REGISTRATIONS = (
     CommandGroupRegistration(
         name="sessions",
         help_text="Session management",
-        commands=(("list", sessions_list_cmd), ("export", sessions_export_cmd), ("delete", sessions_delete_cmd)),
+        commands=(
+            ("list", sessions_list_cmd),
+            ("export", sessions_export_cmd),
+            ("delete", sessions_delete_cmd),
+        ),
     ),
     CommandGroupRegistration(
         name="rag",
@@ -261,6 +400,17 @@ GROUP_COMMAND_REGISTRATIONS = (
             ("verify-tools", mcp_verify_tools_cmd),
         ),
     ),
+    CommandGroupRegistration(
+        name="skills",
+        help_text="Catalog skill management",
+        commands=(
+            ("list", _lazy_skills_list),
+            ("add", _lazy_skills_add),
+            ("remove", _lazy_skills_remove),
+            ("update", _lazy_skills_update),
+            ("info", _lazy_skills_info),
+        ),
+    ),
 )
 
 REGISTERED_TOP_LEVEL_COMMAND_NAMES = tuple(
@@ -276,6 +426,10 @@ def register_core_commands(
     app: typer.Typer,
     *,
     setup_command: object,
+    setup_profile_command: object,
+    profile_show_command: object,
+    profile_switch_command: object,
+    profile_reset_command: object,
     status_command: object,
     version_command: object,
     config_show_command: object,
@@ -286,6 +440,10 @@ def register_core_commands(
 ) -> None:
     registrations = (
         CoreCommandRegistration(setup_command),
+        CoreCommandRegistration(setup_profile_command, name="setup-profile"),
+        CoreCommandRegistration(profile_show_command, name="profile"),
+        CoreCommandRegistration(profile_switch_command, name="profile-switch"),
+        CoreCommandRegistration(profile_reset_command, name="profile-reset"),
         CoreCommandRegistration(status_command),
         CoreCommandRegistration(version_command),
         CoreCommandRegistration(config_show_command, name="config"),
@@ -294,7 +452,9 @@ def register_core_commands(
         CoreCommandRegistration(ask_command),
         CoreCommandRegistration(
             agent_command,
-            command_kwargs={"context_settings": {"allow_extra_args": True, "ignore_unknown_options": True}},
+            command_kwargs={
+                "context_settings": {"allow_extra_args": True, "ignore_unknown_options": True}
+            },
         ),
     )
     for registration in registrations:

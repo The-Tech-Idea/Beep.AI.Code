@@ -57,7 +57,7 @@ Beep.AI.Code is a token-authenticated CLI client for Beep.AI.Server. It should s
 
 ## Multi-Agent Status
 
-The current app supports one autonomous `AgentSession` per `/agent` or `beep agent` run. It does not yet implement coordinated multi-agent planning, sub-agent delegation, shared blackboard state, or concurrent agent workers. The architecture now has the right lower-level pieces for that future work: isolated `AgentSession` instances, shared immutable workspace runtime, and centralized tool composition.
+The current app supports one autonomous `AgentSession` per `/agent` or `beep agent` run, with sub-agent dispatch (`explore`, `plan`, `general` types via `DispatchAgentTool`) delivered in Phase 15. It does not yet implement coordinated multi-agent planning, shared blackboard state, or concurrent agent workers. The architecture has the right lower-level pieces for that future work: isolated `AgentSession` instances, a sub-agent dispatcher with backend injection, shared immutable workspace runtime, and centralized tool composition.
 
 ## Clean Code Rules
 

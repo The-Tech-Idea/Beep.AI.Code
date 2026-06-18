@@ -145,12 +145,26 @@ class CostCommand(Command):
     async def execute(self, _args: str, ctx: dict[str, Any]) -> None:
         session = ctx["session"]
         est = session._token_count
-        cost = (est / 1_000_000) * 3.0
+        model = getattr(session, "_model", None)
+        from beep.chat.pricing import estimate_cost, price_hint
+
+        cost = estimate_cost(est, model)
+        hint = price_hint(model)
+        budget = getattr(session, "_max_token_budget", None)
+        budget_info = (
+            f"Budget: [cyan]{budget:,} tokens[/cyan] ([yellow]{((est / budget) * 100):.1f}% used[/yellow])"
+            if budget and budget > 0
+            else "Budget: [dim]unlimited[/dim]"
+        )
+
         get_console().print(
             Panel(
+                f"Model: [cyan]{model or 'default'}[/cyan]\n"
+                f"Pricing: [dim]{hint}[/dim]\n"
                 f"Requests: [cyan]{session._request_count}[/cyan]\n"
                 f"Est. tokens: [cyan]{est:,}[/cyan]\n"
                 f"Est. cost: [green]${cost:.4f}[/green]\n"
+                f"{budget_info}\n"
                 f"Messages: [cyan]{len(session._messages)}[/cyan]",
                 title="Usage",
                 border_style="blue",

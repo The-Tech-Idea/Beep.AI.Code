@@ -128,6 +128,28 @@ class BeepConfig(BaseModel):
     max_retries: int = Field(
         default=3, ge=0, le=10, description="Maximum retry attempts for transient errors"
     )
+    websearch_enabled: bool = Field(
+        default=False, description="Enable web search (also requires BEEP_WEBSEARCH=1)"
+    )
+
+    # ── Profile (Simple Service Generator) ─────────────────────────────
+    profile_id: str | None = Field(
+        default=None,
+        description="Active user profile ID from Simple Service Generator",
+    )
+    profile_display_name: str | None = Field(
+        default=None,
+        description="Human-readable profile name",
+    )
+    profile_icon: str | None = Field(
+        default=None,
+        description="Profile emoji icon",
+    )
+
+    @property
+    def has_profile(self) -> bool:
+        """True if a Simple Service Generator profile has been saved."""
+        return self.profile_id is not None and bool(self.profile_id.strip())
 
     @property
     def is_configured(self) -> bool:

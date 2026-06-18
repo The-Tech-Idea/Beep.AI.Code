@@ -20,6 +20,7 @@ from beep.chat import repl_context_support, repl_runtime_support
 from beep.coding.metadata import build_coding_metadata
 from beep.coding.response_metadata import count_pending_approvals, find_coding_identity
 from beep.permissions.manager import SandboxMode
+from beep.chat.mode_state import AgentMode, build_mode_banner
 from beep.plugins.runtime import PluginRuntime
 from beep.rules.resolver import build_rules_context
 from beep.runtime.workspace import get_workspace_runtime
@@ -71,6 +72,7 @@ class ChatSession:
         self._hook_config = None
         self._sandbox_mode: SandboxMode = SandboxMode.WORKSPACE_WRITE
         self._sandbox: bool = False
+        self._agent_mode: AgentMode = AgentMode.BUILD
         self._max_token_budget: int | None = None
         runtime = get_workspace_runtime(find_workspace_root(), plugins_enabled=plugins_enabled)
         self._workspace = runtime.workspace
@@ -81,6 +83,12 @@ class ChatSession:
         # Merge built-in commands with project-defined custom commands
         custom_commands = build_custom_command_registry(runtime.memory.commands)
         self._commands = {**runtime.commands, **custom_commands}
+        # ── Profile-aware commands ──────────────────────────────────
+        try:
+            from beep.chat.commands.profile_aware import register_profile_commands
+            register_profile_commands(self._commands)
+        except ImportError:
+            pass
         self._plugins_enabled = plugins_enabled
         self._plugin_runtime: PluginRuntime = runtime.plugin_runtime
         self._plugin_commands = runtime.plugin_commands
@@ -138,21 +146,50 @@ class ChatSession:
         return self._semantic_search_adapter
 
     def _get_coding_metadata(self) -> dict[str, Any] | None:
-        """Get coding_assistant metadata for chat requests."""
+        """Get coding_assistant metadata for chat requests.
+
+        Includes specialty layer and agent context so the server applies
+        the right domain knowledge, tools, and system prompt augmentation.
+        """
         if not self._coding_enabled:
             return None
+
+        # ── Active layer / agent from roster ──────────────────────────
+        use_layer_id: str | None = None
+        active_agent_id: str | None = None
+        profile_id: str | None = None
+        try:
+            from beep.profiles.agent_roster import get_agent_roster
+            roster = get_agent_roster()
+            if roster.active is not None:
+                use_layer_id = roster.active.layer_id
+                active_agent_id = roster.active.agent_id
+            from beep.profiles import has_saved_profile, load_active_profile
+            if has_saved_profile():
+                profile = load_active_profile()
+                if profile:
+                    profile_id = profile.profile_id
+        except ImportError:
+            pass
+
         if self._coding_project_id:
             return build_coding_metadata(
                 workspace_root=self._workspace,
                 interaction_mode="inline",
                 project_id=self._coding_project_id,
                 session_id=self._coding_session_id,
+                use_layer_id=use_layer_id,
+                active_agent_id=active_agent_id,
+                profile_id=profile_id,
             )
         configured_project_id = getattr(self._config, "project_id", None)
         return build_coding_metadata(
             workspace_root=self._workspace,
             interaction_mode="inline",
             project_id=configured_project_id,
+            use_layer_id=use_layer_id,
+            active_agent_id=active_agent_id,
+            profile_id=profile_id,
         )
 
     async def _bootstrap_workspace(self) -> None:

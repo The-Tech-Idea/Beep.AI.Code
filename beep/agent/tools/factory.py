@@ -18,10 +18,12 @@ from beep.agent.tools.file_write import FileWriteTool
 from beep.agent.tools.git_tool import GitTool
 from beep.agent.tools.glob_files import GlobFilesTool
 from beep.agent.tools.list_directory import ListDirectoryTool
+from beep.agent.tools.lsp_diagnostics import LspDiagnosticsTool
 from beep.agent.tools.project_templates import build_template_tools
 from beep.agent.tools.search import SearchTool
 from beep.agent.tools.shell import ShellTool
 from beep.agent.tools.todo_tool import TodoWriteTool
+from beep.agent.tools.web_search import WebSearchTool
 from beep.plugins.runtime import PluginRuntime
 
 logger = logging.getLogger(__name__)
@@ -87,6 +89,8 @@ def get_default_tools(
         SearchTool(workspace_root=workspace_root),
         ListDirectoryTool(workspace_root=workspace_root),
         GlobFilesTool(workspace_root=workspace_root),
+        LspDiagnosticsTool(workspace_root=workspace_root),
+        WebSearchTool(workspace_root=workspace_root),
         GitTool(workspace_root=workspace_root),
         TodoWriteTool(todo_list=todo_list if todo_list is not None else TodoList()),
         DispatchAgentTool(

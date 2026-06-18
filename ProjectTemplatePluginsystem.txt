@@ -1,0 +1,1117 @@
+Yes. Rename the idea from **Project Type Plugin** to **ProjectTemplatePlugin**.
+
+That is better because the plugin is not only detecting a project type; it is responsible for:
+
+```text
+creating the correct project template
+validating existing projects
+injecting standards
+providing folder/module conventions
+providing commands
+providing repair suggestions
+```
+
+So your new model should be:
+
+```text
+LanguagePlugin
+  -> knows Python, C#, TypeScript, etc.
+
+ProjectTemplatePlugin
+  -> knows Flask Service-Based API, Flask Clean Architecture, Blazor App, MAUI MVVM, ASP.NET API, etc.
+
+ArchitectureProfilePlugin
+  -> knows Clean Architecture, DDD, MVVM, Vertical Slice, Modular Monolith, etc.
+
+StandardsPlugin
+  -> knows Clean Code, SOLID, testing, security, naming, etc.
+```
+
+---
+
+# 1. Rename to `ProjectTemplatePlugin`
+
+Use this folder:
+
+```text
+beep/
+  project_templates/
+    base.py
+    registry.py
+    loader.py
+    models.py
+
+    flask_service_based/
+    flask_clean_architecture/
+    fastapi_service_based/
+    aspnet_clean_api/
+    blazor_component_app/
+    blazor_clean_architecture/
+    maui_mvvm/
+    winforms_layered/
+```
+
+Do **not** make one generic `flask` plugin. Make the template explicit:
+
+```text
+flask_service_based
+flask_clean_architecture
+flask_ddd
+```
+
+Same for C#:
+
+```text
+aspnet_clean_api
+blazor_component_app
+blazor_clean_architecture
+maui_mvvm
+winforms_layered
+wpf_mvvm
+```
+
+This gives the agent exact guidance.
+
+---
+
+# 2. New base interface
+
+```python
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+
+@dataclass
+class TemplateDetectionResult:
+    template_id: str
+    matched: bool
+    confidence: float
+    reasons: list[str] = field(default_factory=list)
+
+
+@dataclass
+class TemplateFile:
+    source: str
+    destination: str
+    required: bool = True
+    description: str | None = None
+
+
+@dataclass
+class TemplateCommand:
+    name: str
+    command: list[str]
+    cwd: str | None = None
+    description: str | None = None
+    required: bool = True
+
+
+@dataclass
+class TemplateLayer:
+    name: str
+    path: str
+    purpose: str
+    allowed_dependencies: list[str] = field(default_factory=list)
+    forbidden_dependencies: list[str] = field(default_factory=list)
+
+
+@dataclass
+class TemplateModule:
+    name: str
+    path: str
+    purpose: str
+    files: list[str] = field(default_factory=list)
+
+
+@dataclass
+class TemplateValidationRule:
+    code: str
+    severity: str
+    description: str
+    check_type: str
+    config: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ProjectTemplateProfile:
+    template_id: str
+    name: str
+    language: str
+    framework: str
+    architecture: str
+    layers: list[TemplateLayer]
+    modules: list[TemplateModule]
+    commands: dict[str, list[TemplateCommand]]
+    standards: list[str]
+    validation_rules: list[TemplateValidationRule]
+
+
+class ProjectTemplatePlugin(ABC):
+    template_id: str
+    name: str
+    language: str
+    framework: str
+    architecture: str
+    version: str
+
+    def activate(self, services: "AgentServices") -> None:
+        self.services = services
+
+    @abstractmethod
+    def detect(self, root_path: Path) -> TemplateDetectionResult:
+        pass
+
+    @abstractmethod
+    def get_profile(self) -> ProjectTemplateProfile:
+        pass
+
+    @abstractmethod
+    def create_project(self, root_path: Path, options: dict[str, Any]) -> None:
+        pass
+
+    @abstractmethod
+    def validate_project(self, root_path: Path) -> "ValidationReport":
+        pass
+
+    def get_prompt_context(self) -> str:
+        return ""
+```
+
+---
+
+# 3. New manifest name
+
+Each template plugin should have:
+
+```text
+plugin.yaml
+template.yaml
+standards.md
+prompts.md
+validators.py
+templates/
+```
+
+Example:
+
+```text
+beep/project_templates/flask_service_based/
+  plugin.yaml
+  template.yaml
+  standards.md
+  prompts.md
+  plugin.py
+  validators.py
+  templates/
+    pyproject.toml.j2
+    src/
+    tests/
+```
+
+---
+
+# 4. Flask service-based template
+
+This is the kind of detailed template you want.
+
+## Folder structure
+
+```text
+{{ project_name }}/
+  pyproject.toml
+  README.md
+  .env.example
+  .gitignore
+  src/
+    {{ package_name }}/
+      __init__.py
+
+      app/
+        __init__.py
+        factory.py
+        config.py
+        extensions.py
+
+      modules/
+        users/
+          __init__.py
+          routes.py
+          schemas.py
+          service.py
+          repository.py
+          models.py
+          errors.py
+
+        products/
+          __init__.py
+          routes.py
+          schemas.py
+          service.py
+          repository.py
+          models.py
+          errors.py
+
+      shared/
+        __init__.py
+        database.py
+        responses.py
+        exceptions.py
+        logging.py
+
+  tests/
+    conftest.py
+    modules/
+      users/
+        test_users_routes.py
+        test_users_service.py
+
+      products/
+        test_products_routes.py
+        test_products_service.py
+```
+
+## Layer rules
+
+```text
+routes.py
+  HTTP only.
+  No business logic.
+  Calls service.
+
+schemas.py
+  Request/response validation.
+
+service.py
+  Application/business operations.
+  Coordinates repository and rules.
+
+repository.py
+  Database access only.
+
+models.py
+  SQLAlchemy or persistence models.
+
+errors.py
+  Module-specific exceptions.
+
+shared/
+  Cross-cutting helpers.
+```
+
+## Template profile
+
+```yaml
+id: beep.template.flask_service_based
+name: Flask Service-Based Modular API
+version: 1.0.0
+language: python
+framework: flask
+architecture: service_based_modules
+
+description: >
+  Flask API organized by business modules. Each module has routes, schemas,
+  services, repositories, models, and errors.
+
+layers:
+  - name: presentation
+    path: src/{{ package_name }}/modules/*/routes.py
+    purpose: HTTP routes/controllers
+    allowed_dependencies:
+      - application
+      - shared
+    forbidden_dependencies:
+      - infrastructure_database_direct
+
+  - name: application
+    path: src/{{ package_name }}/modules/*/service.py
+    purpose: Use-case and business workflow logic
+    allowed_dependencies:
+      - domain_or_models
+      - repository
+      - shared
+
+  - name: persistence
+    path: src/{{ package_name }}/modules/*/repository.py
+    purpose: Database access
+    allowed_dependencies:
+      - models
+      - shared.database
+
+modules:
+  - name: users
+    path: src/{{ package_name }}/modules/users
+    files:
+      - routes.py
+      - schemas.py
+      - service.py
+      - repository.py
+      - models.py
+      - errors.py
+
+commands:
+  create:
+    - name: install
+      command: ["pip", "install", "-e", ".[dev]"]
+
+  run:
+    - name: flask-run
+      command: ["flask", "--app", "{{ package_name }}.app.factory:create_app", "run", "--debug"]
+
+  test:
+    - name: pytest
+      command: ["pytest"]
+
+  lint:
+    - name: ruff-check
+      command: ["ruff", "check", "."]
+
+  format:
+    - name: ruff-format
+      command: ["ruff", "format", "."]
+
+standards:
+  - clean_code
+  - python
+  - flask
+  - service_based_architecture
+  - testing
+  - security
+
+validation_rules:
+  - code: FLASK_ROUTES_NO_BUSINESS_LOGIC
+    severity: warning
+    check_type: semgrep
+    description: Route handlers should delegate to services.
+
+  - code: FLASK_MODULE_HAS_SERVICE
+    severity: error
+    check_type: structure
+    description: Each module must contain service.py.
+
+  - code: FLASK_MODULE_HAS_TESTS
+    severity: warning
+    check_type: structure
+    description: Each module should have route and service tests.
+```
+
+## Agent prompt for this template
+
+```md
+You are working in a Flask service-based modular project.
+
+Rules:
+- Organize features under `modules/<feature>/`.
+- Each feature module should contain routes, schemas, service, repository, models, and errors.
+- Routes must be thin and must not contain business logic.
+- Services contain business workflows and use-case logic.
+- Repositories contain database access only.
+- Schemas handle request/response validation.
+- Add tests for both routes and services.
+- Use Ruff for linting and formatting.
+- Use pytest for tests.
+```
+
+---
+
+# 5. Flask Clean Architecture template
+
+For larger projects, use a more formal template:
+
+```text
+{{ project_name }}/
+  src/
+    {{ package_name }}/
+      domain/
+        entities/
+        value_objects/
+        services/
+        events/
+        exceptions.py
+
+      application/
+        use_cases/
+        dto/
+        interfaces/
+        services/
+
+      infrastructure/
+        persistence/
+        external/
+        config/
+
+      presentation/
+        flask/
+          app_factory.py
+          blueprints/
+          schemas/
+
+      shared/
+        result.py
+        errors.py
+
+  tests/
+    domain/
+    application/
+    infrastructure/
+    presentation/
+```
+
+Rules:
+
+```text
+domain/
+  Pure business logic.
+  No Flask.
+  No SQLAlchemy.
+  No HTTP.
+  No database.
+
+application/
+  Use cases.
+  Coordinates domain and interfaces.
+
+infrastructure/
+  Database, external APIs, files, framework implementation.
+
+presentation/
+  Flask routes, blueprints, request/response mapping.
+```
+
+Use this for serious business apps.
+
+---
+
+# 6. ASP.NET Core Clean API template
+
+```text
+{{ ProjectName }}/
+  {{ ProjectName }}.sln
+
+  src/
+    {{ ProjectName }}.Api/
+      Program.cs
+      Controllers/
+      Endpoints/
+      Middleware/
+      Filters/
+
+    {{ ProjectName }}.Application/
+      Abstractions/
+      UseCases/
+      DTOs/
+      Services/
+      Validators/
+
+    {{ ProjectName }}.Domain/
+      Entities/
+      ValueObjects/
+      Services/
+      Events/
+      Exceptions/
+
+    {{ ProjectName }}.Infrastructure/
+      Persistence/
+      Repositories/
+      ExternalServices/
+      Configuration/
+
+  tests/
+    {{ ProjectName }}.Domain.Tests/
+    {{ ProjectName }}.Application.Tests/
+    {{ ProjectName }}.Api.Tests/
+```
+
+Prompt rules:
+
+```md
+You are working in an ASP.NET Core Clean Architecture project.
+
+Rules:
+- Keep controllers/endpoints thin.
+- Put use-case orchestration in Application.
+- Put business rules in Domain.
+- Use domain services only when logic spans multiple entities/value objects.
+- Put EF Core, database, file system, HTTP clients, and external APIs in Infrastructure.
+- Use dependency injection from Program.cs or extension methods.
+- Add tests for domain and application behavior.
+- Run dotnet build and dotnet test after edits.
+```
+
+Validation rules:
+
+```text
+API must not reference Infrastructure directly except composition root.
+Domain must not reference Application, Infrastructure, or API.
+Controllers should not contain business calculations.
+Application should depend on abstractions.
+Infrastructure implements abstractions.
+```
+
+---
+
+# 7. Blazor component app template
+
+For normal Blazor apps:
+
+```text
+{{ ProjectName }}/
+  {{ ProjectName }}.csproj
+  Program.cs
+  App.razor
+  Routes.razor
+
+  Components/
+    Layout/
+    Shared/
+    Forms/
+    Tables/
+
+  Pages/
+    Dashboard.razor
+    Users/
+      UsersPage.razor
+      UserEditPage.razor
+
+  Services/
+    Users/
+      IUserService.cs
+      UserService.cs
+
+  Models/
+    UserDto.cs
+
+  State/
+    AppState.cs
+
+  wwwroot/
+```
+
+Rules:
+
+```text
+Components/
+  Reusable UI only.
+
+Pages/
+  Routable screens.
+
+Services/
+  Application/client-side logic.
+
+Models/
+  DTOs/view models.
+
+State/
+  Shared UI state.
+
+No business/domain logic directly inside .razor files.
+```
+
+Prompt:
+
+```md
+You are working in a Blazor component-based project.
+
+Rules:
+- Keep .razor components focused on UI.
+- Move complex logic to services or state classes.
+- Use dependency injection for services.
+- Use view models/DTOs for UI data.
+- Keep reusable UI in Components/.
+- Keep routable screens in Pages/.
+- Avoid direct database or infrastructure access from components.
+```
+
+---
+
+# 8. Blazor Clean Architecture template
+
+For larger Blazor solutions:
+
+```text
+{{ ProjectName }}/
+  {{ ProjectName }}.sln
+
+  src/
+    {{ ProjectName }}.Web/
+      Components/
+      Pages/
+      Layout/
+      Program.cs
+
+    {{ ProjectName }}.Application/
+      UseCases/
+      Services/
+      DTOs/
+      Interfaces/
+
+    {{ ProjectName }}.Domain/
+      Entities/
+      ValueObjects/
+      Services/
+      Events/
+
+    {{ ProjectName }}.Infrastructure/
+      Persistence/
+      ExternalServices/
+
+  tests/
+    {{ ProjectName }}.Domain.Tests/
+    {{ ProjectName }}.Application.Tests/
+```
+
+Rules:
+
+```text
+Web/
+  Blazor UI only.
+
+Application/
+  Use cases and application services.
+
+Domain/
+  Business model and domain rules.
+
+Infrastructure/
+  Database/external implementation.
+```
+
+---
+
+# 9. .NET MAUI MVVM template
+
+```text
+{{ ProjectName }}/
+  {{ ProjectName }}.csproj
+  MauiProgram.cs
+  App.xaml
+  AppShell.xaml
+
+  Views/
+    HomePage.xaml
+    HomePage.xaml.cs
+    Users/
+      UsersPage.xaml
+      UserDetailsPage.xaml
+
+  ViewModels/
+    BaseViewModel.cs
+    HomeViewModel.cs
+    Users/
+      UsersViewModel.cs
+      UserDetailsViewModel.cs
+
+  Models/
+    User.cs
+
+  Services/
+    Interfaces/
+      IUserService.cs
+      INavigationService.cs
+    UserService.cs
+    NavigationService.cs
+
+  Domain/
+    Entities/
+    ValueObjects/
+    Services/
+
+  Resources/
+    Styles/
+    Images/
+    Fonts/
+
+  Platforms/
+    Android/
+    iOS/
+    Windows/
+
+  Tests/
+    ViewModels/
+    Services/
+    Domain/
+```
+
+Rules:
+
+```text
+Views/
+  XAML UI only.
+  Code-behind should be minimal.
+
+ViewModels/
+  UI state and commands.
+
+Services/
+  App services, navigation, data access abstractions.
+
+Domain/
+  Business logic independent from MAUI.
+
+Resources/
+  Styles/images/fonts.
+
+MauiProgram.cs
+  Dependency injection registration.
+```
+
+Prompt:
+
+```md
+You are working in a .NET MAUI MVVM project.
+
+Rules:
+- Prefer MVVM.
+- Keep code-behind thin.
+- Put commands and UI state in ViewModels.
+- Put reusable business rules in Domain or Services.
+- Register services and view models in MauiProgram.cs.
+- Keep styles in Resources/Styles.
+- Run dotnet build after changes.
+```
+
+---
+
+# 10. WinForms layered template
+
+For your own background, this is very useful.
+
+```text
+{{ ProjectName }}/
+  {{ ProjectName }}.sln
+
+  src/
+    {{ ProjectName }}.WinForms/
+      Forms/
+      Controls/
+      Presenters/
+      ViewModels/
+      Program.cs
+
+    {{ ProjectName }}.Application/
+      Services/
+      UseCases/
+      DTOs/
+      Interfaces/
+
+    {{ ProjectName }}.Domain/
+      Entities/
+      ValueObjects/
+      Services/
+      Events/
+
+    {{ ProjectName }}.Infrastructure/
+      Persistence/
+      Repositories/
+      ExternalServices/
+
+  tests/
+    {{ ProjectName }}.Domain.Tests/
+    {{ ProjectName }}.Application.Tests/
+```
+
+Rules:
+
+```text
+Forms/
+  UI only.
+
+Controls/
+  Reusable WinForms controls.
+
+Presenters/ViewModels/
+  UI orchestration.
+
+Application/
+  Use cases.
+
+Domain/
+  Business rules.
+
+Infrastructure/
+  Database, files, APIs.
+```
+
+Prompt:
+
+```md
+You are working in a WinForms layered project.
+
+Rules:
+- Do not put business logic inside Form classes.
+- Keep custom controls focused on rendering and interaction.
+- Use presenters/view models for UI orchestration.
+- Put business rules in Domain.
+- Put use cases in Application.
+- Put database/external access in Infrastructure.
+- Run dotnet build after edits.
+```
+
+---
+
+# 11. FastAPI service-based template
+
+```text
+{{ project_name }}/
+  pyproject.toml
+  src/
+    {{ package_name }}/
+      main.py
+      core/
+        config.py
+        logging.py
+        errors.py
+
+      modules/
+        users/
+          router.py
+          schemas.py
+          service.py
+          repository.py
+          models.py
+          dependencies.py
+
+      shared/
+        database.py
+        pagination.py
+        responses.py
+
+  tests/
+    modules/
+      users/
+        test_users_router.py
+        test_users_service.py
+```
+
+Rules:
+
+```text
+router.py
+  HTTP only.
+
+schemas.py
+  Pydantic request/response models.
+
+service.py
+  Business/application logic.
+
+repository.py
+  Data access.
+
+dependencies.py
+  FastAPI dependencies.
+```
+
+---
+
+# 12. Django service-based template
+
+```text
+{{ project_name }}/
+  manage.py
+  config/
+    settings.py
+    urls.py
+    asgi.py
+    wsgi.py
+
+  apps/
+    users/
+      models.py
+      views.py
+      urls.py
+      serializers.py
+      services.py
+      selectors.py
+      repositories.py
+      tests/
+
+    products/
+      models.py
+      views.py
+      urls.py
+      serializers.py
+      services.py
+      selectors.py
+      repositories.py
+      tests/
+
+  shared/
+    exceptions.py
+    responses.py
+```
+
+Rules:
+
+```text
+views.py
+  Thin HTTP layer.
+
+serializers.py
+  Validation and serialization.
+
+services.py
+  Write operations and workflows.
+
+selectors.py
+  Read/query logic.
+
+repositories.py
+  Optional persistence abstraction.
+
+models.py
+  Django models and model-level invariants.
+```
+
+---
+
+# 13. The agent should select template by intent
+
+Example user says:
+
+```text
+Create a Flask project
+```
+
+Agent should ask internally:
+
+```text
+Is it simple, service-based, clean architecture, or DDD?
+```
+
+Default selection:
+
+```text
+Small API             -> flask_service_based
+Enterprise app        -> flask_clean_architecture
+Business-heavy app    -> flask_ddd
+Prototype             -> flask_minimal
+```
+
+You can encode defaults:
+
+```yaml
+selection_rules:
+  default: flask_service_based
+
+  when_task_contains:
+    enterprise: flask_clean_architecture
+    domain: flask_ddd
+    business rules: flask_ddd
+    simple: flask_minimal
+    prototype: flask_minimal
+```
+
+---
+
+# 14. Updated registry names
+
+Use this terminology:
+
+```python
+class ProjectTemplateRegistry:
+    def register(self, plugin: ProjectTemplatePlugin) -> None:
+        ...
+
+    def detect_templates(self, root_path: Path) -> list[TemplateDetectionResult]:
+        ...
+
+    def get_best_template(self, root_path: Path) -> ProjectTemplatePlugin | None:
+        ...
+
+    def create_from_template(
+        self,
+        template_id: str,
+        root_path: Path,
+        options: dict,
+    ) -> None:
+        ...
+
+    def validate_with_template(
+        self,
+        template_id: str,
+        root_path: Path,
+    ) -> ValidationReport:
+        ...
+```
+
+---
+
+# 15. How it links to the existing agent
+
+Your current agent services should call plugins like this:
+
+```text
+User request
+  -> detect/create project intent
+  -> ProjectTemplateRegistry selects plugin
+  -> Plugin provides:
+       prompt context
+       standards
+       file templates
+       commands
+       validation rules
+       context hints
+  -> Agent executes through existing tools
+  -> Validation service checks result
+```
+
+The plugin should not replace your agent. It should **feed your agent with project-specific intelligence**.
+
+---
+
+# 16. Final naming update
+
+Replace this:
+
+```text
+ProjectTypePlugin
+```
+
+With this:
+
+```text
+ProjectTemplatePlugin
+```
+
+And structure templates like this:
+
+```text
+beep/project_templates/
+  flask_minimal/
+  flask_service_based/
+  flask_clean_architecture/
+  flask_ddd/
+
+  fastapi_service_based/
+  fastapi_clean_architecture/
+
+  django_service_based/
+
+  aspnet_clean_api/
+  aspnet_vertical_slice/
+
+  blazor_component_app/
+  blazor_clean_architecture/
+
+  maui_mvvm/
+  maui_clean_architecture/
+
+  winforms_layered/
+  wpf_mvvm/
+```
+
+That gives you a plugin system where the agent can say:
+
+```text
+I am creating or validating this project using:
+- Language: Python
+- Framework: Flask
+- Template: Service-Based Modular API
+- Standards: Clean Code, Testing, Security
+- Validators: Ruff, Pytest, Structure Rules
+```
+
+This is much better than a generic “Flask plugin.”

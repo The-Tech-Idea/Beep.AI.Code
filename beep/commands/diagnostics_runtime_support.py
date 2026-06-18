@@ -57,6 +57,9 @@ def collect_diagnostics_state(
     )
     plugin_runtime = load_runtime_plugins(workspace, enabled=True)
     resolved_mcp = resolve_mcp_configuration(config, workspace)
+    from beep.integrations.tool_detector import detect_all as detect_all_tools
+
+    tool_statuses = detect_all_tools()
     return {
         "version": __version__,
         "config": config,
@@ -71,6 +74,7 @@ def collect_diagnostics_state(
         "repair_guidance": repair_guidance,
         "plugin_runtime": plugin_runtime,
         "resolved_mcp": resolved_mcp,
+        "tool_statuses": tool_statuses,
     }
 
 
@@ -151,6 +155,20 @@ def render_diagnostics_state(state: dict[str, object]) -> None:
         get_console().print("MCP discovery warnings:")
         for err in resolved_mcp.errors:
             get_console().print(f"  - {err}")
+
+    tool_statuses = state.get("tool_statuses", [])
+    if tool_statuses:
+        found_tools = [t for t in tool_statuses if getattr(t, "found", False)]
+        missing_tools = [t for t in tool_statuses if not getattr(t, "found", False)]
+        get_console().print(f"\n[bold]External Tools:[/bold]")
+        get_console().print(
+            f"  Available ({len(found_tools)}): {', '.join(t.tool_id for t in found_tools) if found_tools else 'none'}"
+        )
+        if missing_tools:
+            get_console().print(f"  Missing ({len(missing_tools)}):")
+            for t in missing_tools:
+                hint = getattr(t, "install_hint", "") or ""
+                get_console().print(f"    - {t.tool_id}: {hint}")
 
     deps = {
         "typer": "typer",

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from beep.chat.mode_state import AgentMode
 from beep.coding.prompt_context import build_workspace_system_prompt
 
 if TYPE_CHECKING:
-    
     from beep.chat.repl import ChatSession
 
 
@@ -16,6 +16,16 @@ def build_system_prompt_content(session: ChatSession, mode: str) -> str:
     plugin_context = session._plugin_runtime.registry.get_context().strip()
     if plugin_context:
         extra_sections.append("## Plugin Context\n\n" + plugin_context)
+
+    agent_mode = getattr(session, "_agent_mode", AgentMode.BUILD)
+    if agent_mode == AgentMode.PLAN:
+        extra_sections.append(
+            "## MODE: PLAN (Read-Only)\n\n"
+            "You are operating in Plan mode. You can read files, search code, and answer "
+            "questions, but you MUST NOT modify any files or run shell commands that write.\n"
+            "Suggest changes and let the user approve them before switching to Build mode."
+        )
+
     return build_workspace_system_prompt(
         mode,
         session._workspace,
@@ -56,6 +66,20 @@ def show_welcome(
 ) -> None:
     from rich.panel import Panel
 
+    # ── Profile-aware welcome ────────────────────────────────────────
+    profile_header = ""
+    try:
+        from beep.profiles import has_saved_profile, load_active_profile
+        if has_saved_profile():
+            profile = load_active_profile()
+            if profile:
+                profile_header = (
+                    f"{profile.profile_icon} [bold]{profile.profile_display_name}[/bold] | "
+                    f"[dim]{profile.model.model_id}[/dim]\n"
+                )
+    except ImportError:
+        pass
+
     memory_info = ""
     if session._memory.global_instructions:
         memory_info = " | [yellow]project memory[/yellow]"
@@ -87,13 +111,21 @@ def show_welcome(
     rule_info = f" | [dim]rules: {len(session._rules)}[/dim]"
 
     model_display = session._model or "[dim]default[/dim]"
+    agent_mode = getattr(session, "_agent_mode", AgentMode.BUILD)
+    mode_color = "blue" if agent_mode == AgentMode.PLAN else "green"
+    mode_display = (
+        f"[{mode_color}]Plan[/{mode_color}]"
+        if agent_mode == AgentMode.PLAN
+        else f"[{mode_color}]Build[/{mode_color}]"
+    )
 
     console.print(
         Panel.fit(
+            f"{profile_header}"
             f"[bold blue]Beep.AI.Code[/bold blue]\n"
             f"Workspace: [cyan]{session._workspace.name}[/cyan]"
             f"{memory_info}{git_info}{pin_info}{coding_info}{plugin_info}{skill_info}{rule_info}\n"
-            f"Model: {model_display} | Mode: [cyan]{session._mode}[/cyan] | "
+            f"Model: {model_display} | AI: [cyan]{session._mode}[/cyan] | Agent: {mode_display} | "
             f"Session: [dim]{session._session_id}[/dim]",
             border_style="blue",
         )

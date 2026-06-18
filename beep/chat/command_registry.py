@@ -17,6 +17,8 @@ from beep.chat.commands.coding import CodingCommand
 from beep.chat.commands.llm_turns import AskCommand
 from beep.chat.commands.mcp import McpCommand
 from beep.chat.commands.memory import MemoryReloadCommand
+from beep.chat.commands.mode import BuildCommand, PlanCommand
+from beep.chat.commands.checkpoint import CheckpointsCommand, UndoEditCommand
 from beep.chat.commands.misc import (
     ClipboardCommand,
     ExitCommand,
@@ -74,6 +76,7 @@ from beep.chat.commands.system import (
 )
 from beep.chat.commands.token import TokenCommand
 from beep.chat.commands.watch import WatchCommand
+from beep.chat.commands.web_search import WebSearchCommand
 from beep.chat.commands.workflow import (
     BashCommand,
     BranchCommand,
@@ -153,6 +156,11 @@ def build_command_registry() -> dict[str, Command]:
         MemoryReloadCommand(),
         McpCommand(),
         ContextCommand(),
+        WebSearchCommand(),
+        PlanCommand(),
+        BuildCommand(),
+        UndoEditCommand(),
+        CheckpointsCommand(),
     ]
     registry: dict[str, Command] = {}
     for command in commands:

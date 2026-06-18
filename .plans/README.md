@@ -1,5 +1,14 @@
 # Beep.AI.Code — Engineering Plan Index
 
+> **Last updated:** 2026-06-16 — Strategic shift: Code becomes the desktop UI; Server stays pure API
+
+## Strategic Documents
+
+| Document | What It Covers |
+|----------|---------------|
+| [`STRATEGY_CLIENT_SERVER_UI.md`](./STRATEGY_CLIENT_SERVER_UI.md) | **Client/Server split**: Server is API-only, Code is the desktop UI. Architecture, tech stack (WPF+Blazor Hybrid), migration plan. |
+| [`UI_SPEC_PROFESSIONAL_AGENT.md`](./UI_SPEC_PROFESSIONAL_AGENT.md) | **Professional Agent UI spec**: 3-panel layout, agent sidebar, chat canvas, context panel, keyboard shortcuts, profile themes. Based on Cursor/Copilot/Windsurf analysis. |
+
 ## Purpose
 
 This folder tracks all planned and in-progress engineering work for Beep.AI.Code.
@@ -157,3 +166,8 @@ Phase 11 changes the `agent` branch in that flow. It does not migrate the standa
 | 16 | [PHASE_16_PROVIDER_PACKS_AND_CAPABILITY_PARITY.md](PHASE_16_PROVIDER_PACKS_AND_CAPABILITY_PARITY.md) | First-class provider packs and capability parity follow-on to the existing provider plugin seam, including real streamed completions, selected provider options, structured-output forwarding on OpenAI-style transports, multimodal vision contract support, public CLI flags for structured output and file or image-backed initial multimodal input, and an explicit provider-parameter audit boundary | Complete |
 | 17 | [PHASE_17_PORTABLE_AGENT_BUNDLES_AND_RUNNER_TARGETS.md](PHASE_17_PORTABLE_AGENT_BUNDLES_AND_RUNNER_TARGETS.md) | Portable agent bundle contract, export/import flows, local runner-target execution, Beep.AI.Server interop, JavaScript SDK parity, and validation/provenance hardening are complete | Complete |
 | 18 | [PHASE_18_PUBLISHING_CHANNELS_AND_DEPLOYMENT_TARGETS.md](PHASE_18_PUBLISHING_CHANNELS_AND_DEPLOYMENT_TARGETS.md) | Complete: package and deployment adapters now share one provenance and release metadata contract, all supported local channels emit release metadata artifacts, Beep.AI.Server hosted deployment works through the portable bundle import endpoint, and CI/docs explicitly cover the no-credentials dry-run validation path | Complete |
+| 19 | [semble.txt](semble.txt) | Semble semantic code-search integration (SembleIndexAdapter, SemanticSearchTool, per-workspace singleton, auto-context, preset MCP server, 50+ tests) | Complete |
+| 20 | [PHASE_20_INTEGRATIONS_CATALOG.md](PHASE_20_INTEGRATIONS_CATALOG.md) | Built-in integrations catalog of skills + MCP servers + dev tools with one-command install and governance (trust tiers, version pins, gated fetch) | Not started |
+| 21 | [PHASE_21_CODING_AGENT_PARITY_V2.md](PHASE_21_CODING_AGENT_PARITY_V2.md) | Claude Code / OpenCode parity v2 — plan/build toggle, @mention subagents, persistent agent server, parallel worktree agents, generic LSP, ACP editor integration, provider breadth + local models | Not started |
+| 22 | [PHASE_22_GREENFIELD_COMMANDS.md](PHASE_22_GREENFIELD_COMMANDS.md) | Greenfield commands — web search (fills empty `websearch` package), first-class git family (`beep commit/branch/pr/diff`), `beep init` onboarding | Not started |
+| 23 | [PHASE_23_SERVER_INTEGRATION_PARITY.md](PHASE_23_SERVER_INTEGRATION_PARITY.md) | Server integration parity — fix `ai_middleware`→`v1` namespace migration in CLI, capability discovery, coding-session-via-chat, RAG parity, server MCP registry | Not started |

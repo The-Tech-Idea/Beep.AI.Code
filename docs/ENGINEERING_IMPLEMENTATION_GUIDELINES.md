@@ -1,7 +1,9 @@
 # Workspace Engineering Implementation Guidelines
 
-Date: 2026-03-29
+Date: 2026-03-29  
 Purpose: Mandatory engineering standards for all implementation, refactor, integration, and planning work across every project under `Beep.AI.Server`.
+
+> **Beep.AI.Code (this repository):** CLI-specific architecture and feature docs live under [`docs/INDEX.md`](INDEX.md). Apply the auth, API, and clean-code rules here when changing server integration or package structure.
 
 Scope:
 - `Beep.AI.Server`
@@ -9,6 +11,7 @@ Scope:
 - `Beep.AI.SDK`
 - `Beep.AI.Clients`
 - `Beep.AI.Jarvis`
+- `Beep.AI.Code` (CLI; may be a standalone repo or monorepo subdirectory)
 - shared solution-level scripts, docs, and tooling
 
 ## Non-Negotiable Standards
@@ -60,18 +63,18 @@ Scope:
 
 1. `Beep.AI.Server` is the canonical API host.
 2. All local OpenAI-compatible APIs live under `/v1/*`.
-3. All external extension APIs live under `/ai-middleware/api/*`.
-4. API Bearer tokens are for external APIs only: all local OpenAI-compatible `/v1/*` APIs and all external extension `/ai-middleware/api/*` APIs.
+3. All external extension APIs live under `/v1/api/*` (migrated from `/ai-middleware/api/*` per the server-side namespace consolidation; PH-23 tracks the CLI-side migration).
+4. API Bearer tokens are for external APIs only: all local OpenAI-compatible `/v1/*` APIs and all external extension `/v1/api/*` APIs.
 5. Website/admin routes must use website/session auth only via `app.utils.permissions.require_auth` plus `permission_required(...)` or `admin_required(...)` when authorization is needed.
 6. Website/admin route modules must not import `require_auth` from `app.middleware.token_auth`; that decorator is for application-token APIs only.
-7. Website pages and their browser JavaScript must not convert website session cookies into Bearer `Authorization` headers in order to call `/v1/*` or `/ai-middleware/api/*`.
+7. Website pages and their browser JavaScript must not convert website session cookies into Bearer `Authorization` headers in order to call `/v1/*` or `/v1/api/*`.
 8. If a website page needs AJAX/JSON behavior, add a website/session-auth endpoint under the website route surface instead of calling a token-only API.
 9. Application tokens are for external applications only.
 10. Application tokens authenticate applications, not website users.
 11. If an application request needs end-user context, pass it explicitly in the request contract.
 12. SDKs and clients must use the server root URL as configuration input.
 13. SDKs and clients must not require consumers to hardcode `/ai-middleware` into the base URL.
-14. Standard OpenAI-compatible operations should go to `/v1/*`; platform-specific extensions should go to `/ai-middleware/api/*`.
+14. Standard OpenAI-compatible operations should go to `/v1/*`; platform-specific extensions should go to `/v1/api/*`.
 
 ## Structural Defaults
 
@@ -127,13 +130,13 @@ Use this shape unless there is a strong reason not to:
 ## Project Expectations
 
 ### `Beep.AI.Server`
-- Owns the runtime API contracts, website/admin surface, OpenAI compatibility surface, and `ai_middleware` extension surface.
+- Owns the runtime API contracts, website/admin surface, OpenAI compatibility surface, and `v1` extension surface (migrated from `ai_middleware`).
 - Must keep website/session auth clearly separated from application-token auth.
-- Website pages must call website/session-auth routes only; do not wire website UI directly to token-only `/v1/*` or `/ai-middleware/api/*` endpoints unless the page is explicitly acting as an external API client by design.
+- Website pages must call website/session-auth routes only; do not wire website UI directly to token-only `/v1/*` or `/v1/api/*` endpoints unless the page is explicitly acting as an external API client by design.
 
 ### `Beep.AI.Researcher`
 - Must integrate through the canonical server contract only.
-- Use `/v1/*` for OpenAI-compatible flows and `/ai-middleware/api/*` for extension features like RAG, agents, extraction, and other platform-specific services.
+- Use `/v1/*` for OpenAI-compatible flows and `/v1/api/*` for extension features like RAG, agents, extraction, and other platform-specific services.
 
 ### `Beep.AI.SDK`
 - Every SDK target must normalize the server root URL correctly.

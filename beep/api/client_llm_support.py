@@ -5,6 +5,14 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
+from beep.api.endpoints import (
+    V1_CHAT_COMPLETIONS,
+    V1_EMBEDDINGS,
+    V1_HEALTH,
+    V1_MESSAGES,
+    V1_MODELS,
+    V1_RESPONSES,
+)
 from beep.api.payloads import build_chat_completion_payload
 from beep.api.streaming import (
     CompletionStreamDelta,
@@ -164,16 +172,16 @@ async def health_check(client: BeepAPIClient) -> dict[str, Any]:
 
 
 async def v1_health(client: BeepAPIClient) -> dict[str, Any]:
-    return await client._request("GET", "/v1/health")
+    return await client._request("GET", V1_HEALTH)
 
 
 async def list_models(client: BeepAPIClient) -> list[dict[str, Any]]:
-    data = await client._request("GET", "/v1/models")
+    data = await client._request("GET", V1_MODELS)
     return data.get("data", [])
 
 
 async def get_model(client: BeepAPIClient, model_id: str) -> dict[str, Any]:
-    return await client._request("GET", f"/v1/models/{model_id}")
+    return await client._request("GET", f"{V1_MODELS}/{model_id}")
 
 
 async def chat_completion(
@@ -197,7 +205,7 @@ async def chat_completion(
         coding_assistant=coding_assistant,
         response_format=response_format,
     )
-    return await client._request("POST", "/v1/chat/completions", json=payload)
+    return await client._request("POST", V1_CHAT_COMPLETIONS, json=payload)
 
 
 async def chat_completion_stream(
@@ -253,7 +261,7 @@ async def chat_completion_event_stream(
         response_format=response_format,
     )
 
-    async with http_client.stream("POST", "/v1/chat/completions", json=payload) as response:
+    async with http_client.stream("POST", V1_CHAT_COMPLETIONS, json=payload) as response:
         response.raise_for_status()
         async for event in iter_chat_sse_events(response.aiter_lines()):
             if event.usage:
@@ -295,7 +303,7 @@ async def anthropic_messages(
 
     return await client._request(
         "POST",
-        "/v1/messages",
+        V1_MESSAGES,
         json=payload,
         extra_headers=extra_headers,
     )
@@ -329,7 +337,7 @@ async def openai_responses(
         payload["tools"] = tools
     if reasoning:
         payload["reasoning"] = reasoning
-    return await client._request("POST", "/v1/responses", json=payload)
+    return await client._request("POST", V1_RESPONSES, json=payload)
 
 
 async def create_embeddings(
@@ -341,4 +349,4 @@ async def create_embeddings(
     payload: dict[str, Any] = {"input": input_texts}
     if model:
         payload["model"] = model
-    return await client._request("POST", "/v1/embeddings", json=payload)
+    return await client._request("POST", V1_EMBEDDINGS, json=payload)

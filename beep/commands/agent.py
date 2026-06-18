@@ -13,10 +13,8 @@ from beep.agent.environment import AgentEnvironmentManager
 from beep.agent.environment_catalog import AGENT_PACKAGES
 from beep.agent.loop import resume_agent, run_agent
 from beep.api.client import BeepAPIClient
-from beep.commands.agent_inputs import (
-    build_agent_initial_user_content,
-    build_agent_response_format,
-)
+from beep.cli_support_async import run_async_cmd
+from beep.coding.metadata import build_coding_metadata
 from beep.commands.agent_admin import (
     agent_providers_impl,
     agent_reinstall_impl,
@@ -24,16 +22,19 @@ from beep.commands.agent_admin import (
     agent_status_impl,
     agent_uninstall_impl,
 )
-from beep.coding.metadata import build_coding_metadata
+from beep.commands.agent_inputs import (
+    build_agent_initial_user_content,
+    build_agent_response_format,
+)
 from beep.config import load_config
 from beep.mcp.discovery import resolve_mcp_configuration
 from beep.permissions.manager import SandboxMode, coerce_sandbox_mode
 from beep.plugins.runtime import load_runtime_plugins
 from beep.runtime.workspace import get_workspace_runtime
 from beep.setup_wizard import ensure_agent_configured
-from beep.workspace.detector import find_workspace_root
 from beep.utils.console import get_console
-from beep.cli_support_async import run_async_cmd
+from beep.workspace.detector import find_workspace_root
+from beep.workspace.git import is_git_repo
 
 
 def _resolve_typer_option_default(value: Any) -> Any:
@@ -291,3 +292,38 @@ def _run_agent_operation(
         await operation(None, config)
 
     run_async_cmd(_run, cancel_message="Agent stopped")
+
+
+def agent_fanout_cmd(
+    goal: str = typer.Argument(..., help="Goal for all parallel agents"),
+    workers: int = typer.Option(2, "--workers", "-n", help="Number of parallel agents"),
+    max_workers: int = typer.Option(4, "--max-workers", help="Maximum concurrency cap"),
+) -> None:
+    """Run multiple agents in parallel across isolated git worktrees."""
+    workspace_root = find_workspace_root()
+    if not is_git_repo(workspace_root):
+        get_console().print("[red]Workspace must be a git repository for fan-out.[/red]")
+        raise typer.Exit(1)
+
+    from beep.agent.parallel.coordinator import ParallelCoordinator, _default_run_agent
+
+    async def _run() -> None:
+        coordinator = ParallelCoordinator(
+            workspace_root,
+            max_workers=max_workers,
+        )
+        result = await coordinator.fan_out(
+            goal=goal,
+            worker_count=workers,
+            run_agent_fn=_default_run_agent,
+        )
+        get_console().print("\n[bold]Fan-out results:[/bold]")
+        get_console().print(f"  Success: {result.success_count}/{len(result.results)}")
+        for r in result.results:
+            status = "[green]OK[/green]" if r.success else "[red]FAIL[/red]"
+            error_msg = f" ({r.error})" if r.error else ""
+            get_console().print(f"  [{r.run_id}] {status}{error_msg}")
+        if result.combined_summary:
+            get_console().print(f"\n[bold]Summary:[/bold]\n{result.combined_summary}")
+
+    run_async_cmd(_run, cancel_message="Fan-out stopped")

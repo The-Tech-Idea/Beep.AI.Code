@@ -34,7 +34,7 @@ the agent loop and the chat REPL simultaneously.
   building the `httpx.AsyncClient`.
 
 - [ ] **client.py — `compact_conversation` endpoint path is version-specific.**
-  The path `/ai-middleware/api/coding-assistant/sessions/compact` is baked in.
+  The path `/v1/api/coding-assistant/sessions/compact` is baked in.
   Move it to a constant or `BeepConfig.compact_endpoint`.
 
 - [ ] **client.py — `responses_completion` is a deprecated alias that diverges from

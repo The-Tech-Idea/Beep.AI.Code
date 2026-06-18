@@ -115,6 +115,107 @@ def config_set(key: str, value: str) -> None:
     )
 
 
+def setup_profile(reset: bool = typer.Option(False, "--reset", help="Reset existing profile and start fresh")) -> None:
+    """Run the profile-driven setup wizard (Simple Service Generator).
+
+    Detects hardware, picks a profile, asks plain-language questions,
+    and creates all AI services in one click. Saves the profile so
+    the wizard is skipped on next startup.
+    """
+    try:
+        from beep.profiles.setup_wizard import setup_profile_command
+        if reset:
+            from beep.profiles import delete_active_profile
+            delete_active_profile()
+        setup_profile_command()
+    except KeyboardInterrupt:
+        get_console().print("\n[yellow]Profile setup cancelled[/yellow]")
+    except Exception as exc:
+        get_console().print(f"[red]Profile setup failed: {exc}[/red]")
+        raise typer.Exit(1)
+
+
+def profile_show() -> None:
+    """Show the current profile and its settings."""
+    from beep.profiles import has_saved_profile, load_active_profile
+    from beep.config import load_config as _load_config
+
+    console = get_console()
+    config = _load_config()
+
+    if not has_saved_profile():
+        console.print("[yellow]No profile set. Run 'beep setup-profile' to create one.[/yellow]")
+        if config.profile_id:
+            console.print(f"[dim]Config has profile_id: {config.profile_id}[/dim]")
+        return
+
+    profile = load_active_profile()
+    if profile is None:
+        console.print("[red]Profile file corrupted. Run 'beep setup-profile --reset' to fix.[/red]")
+        return
+
+    from rich.panel import Panel
+    from rich.table import Table
+
+    console.print()
+    console.print(Panel.fit(
+        f"{profile.profile_icon} [bold]{profile.profile_display_name}[/bold]",
+        title="Active Profile",
+    ))
+
+    table = Table(show_header=False, box=None, padding=(0, 1))
+    table.add_column("Setting", style="dim")
+    table.add_column("Value")
+    table.add_row("Profile ID", profile.profile_id)
+    table.add_row("Server", profile.server_url)
+    table.add_row("Model", profile.model.model_id)
+    table.add_row("Theme", profile.theme)
+    table.add_row("Hardware Tier", profile.model.hardware_tier)
+    if profile.created_services:
+        table.add_row("Services", ", ".join(profile.created_services[:5]) +
+                      (f" +{len(profile.created_services) - 5} more" if len(profile.created_services) > 5 else ""))
+
+    console.print(table)
+    console.print()
+    console.print("[dim]Run 'beep setup-profile --reset' to start over with a new profile.[/dim]")
+
+
+def profile_switch(profile_id: str) -> None:
+    """Switch to a different profile. Requires re-running the setup wizard."""
+    from beep.profiles import has_saved_profile, delete_active_profile
+    from beep.profiles.setup_wizard import run_profile_setup_wizard
+    from beep.config import load_config as _load_config
+
+    console = get_console()
+
+    if has_saved_profile():
+        current = load_active_profile()
+        if current:
+            console.print(f"[yellow]Current profile: {current.profile_icon} {current.profile_display_name}[/yellow]")
+            console.print("[dim]Switching profiles requires re-running the setup wizard.[/dim]")
+
+    config = _load_config()
+    profile = run_profile_setup_wizard(
+        server_url=config.server_url or "http://localhost:5000",
+        api_token=config.api_token,
+    )
+    if profile:
+        console.print(f"[green]Switched to: {profile.profile_icon} {profile.profile_display_name}[/green]")
+
+
+def profile_reset() -> None:
+    """Reset the current profile and remove all saved profile data."""
+    from beep.profiles import delete_active_profile, has_saved_profile
+
+    console = get_console()
+    if not has_saved_profile():
+        console.print("[yellow]No profile to reset.[/yellow]")
+        return
+
+    delete_active_profile()
+    console.print("[green]Profile reset. Run 'beep setup-profile' to create a new one.[/green]")
+
+
 def chat(
     model: str | None = typer.Option(None, "--model", "-m"),
     mode: str = typer.Option("assistant", "--mode"),
@@ -223,6 +324,10 @@ def _run_default() -> None:
 register_core_commands(
     app,
     setup_command=setup,
+    setup_profile_command=setup_profile,
+    profile_show_command=profile_show,
+    profile_switch_command=profile_switch,
+    profile_reset_command=profile_reset,
     status_command=status,
     version_command=version,
     config_show_command=config_show,

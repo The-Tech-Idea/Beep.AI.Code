@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from beep.api.endpoints import V1_API_AGENTS_BUNDLES_IMPORT
+
 if TYPE_CHECKING:
     from beep.api.client import BeepAPIClient
 
@@ -30,6 +32,6 @@ async def import_agent_bundle(
     }
     return await client._request(
         "POST",
-        "/ai-middleware/api/agents/bundles/import",
+        V1_API_AGENTS_BUNDLES_IMPORT,
         json=payload,
     )

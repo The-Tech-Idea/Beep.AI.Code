@@ -4,6 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from beep.api.endpoints import (
+    V1_AGENT_CODING_EXECUTE,
+    V1_AGENT_CODING_SESSIONS,
+    V1_AGENT_CODING_SKILLS,
+    V1_RAG_COLLECTIONS,
+    V1_RAG_QUERY,
+    V1_API_TOKENS_CHECK,
+    V1_COMPACTION,
+)
+from beep.api.response_envelope import unwrap_v1_envelope
+
 if TYPE_CHECKING:
     from beep.api.client import BeepAPIClient
 
@@ -99,7 +110,7 @@ async def compact_conversation(
     }
     return await client._request(
         "POST",
-        "/v1/api/agent-framework/agents/beep.agent.coding/execute",
+        V1_COMPACTION,
         json=payload,
     )
 
@@ -123,7 +134,7 @@ async def bootstrap_workspace(
         payload["model_id"] = model_id
     return await client._request(
         "POST",
-        "/v1/api/agent-framework/agents/beep.agent.coding/execute",
+        V1_AGENT_CODING_EXECUTE,
         json=payload,
     )
 
@@ -147,7 +158,7 @@ async def bootstrap_project(
         payload["model_id"] = model_id
     return await client._request(
         "POST",
-        "/v1/api/agent-framework/agents/beep.agent.coding/execute",
+        V1_AGENT_CODING_EXECUTE,
         json=payload,
     )
 
@@ -167,7 +178,7 @@ async def create_session(
         payload["model_id"] = model_id
     return await client._request(
         "POST",
-        "/v1/api/agent-framework/agents/beep.agent.coding/sessions",
+        V1_AGENT_CODING_SESSIONS,
         json=payload,
     )
 
@@ -175,7 +186,7 @@ async def create_session(
 async def list_sessions(client: BeepAPIClient, *, project_id: int) -> list[dict[str, Any]]:
     result = await client._request(
         "GET",
-        "/v1/api/agent-framework/agents/beep.agent.coding/sessions",
+        V1_AGENT_CODING_SESSIONS,
     )
     return result.get("sessions", [])
 
@@ -190,19 +201,20 @@ async def rag_query(
     payload: dict[str, Any] = {"query": query, "top_k": top_k}
     if collection:
         payload["collection"] = collection
-    return await client._request("POST", "/v1/api/rag/query", json=payload)
+    raw = await client._request("POST", V1_RAG_QUERY, json=payload)
+    return unwrap_v1_envelope(raw)
 
 
 async def rag_list_collections(client: BeepAPIClient) -> list[dict[str, Any]]:
-    result = await client._request("GET", "/v1/api/rag/collections")
-    return result.get("collections", [])
+    raw = await client._request("GET", V1_RAG_COLLECTIONS)
+    return unwrap_v1_envelope(raw).get("collections", [])
 
 
 async def check_token(client: BeepAPIClient) -> dict[str, Any]:
-    return await client._request("GET", "/v1/api/tokens/check")
+    return await client._request("GET", V1_API_TOKENS_CHECK)
 
 
 async def fetch_server_skills(client: BeepAPIClient) -> list[dict[str, Any]]:
     """Fetch global skills from the server."""
-    result = await client._request("GET", "/v1/api/agent-framework/agents/beep.agent.coding/skills")
+    result = await client._request("GET", V1_AGENT_CODING_SKILLS)
     return result.get("skills", [])

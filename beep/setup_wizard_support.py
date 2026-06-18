@@ -119,9 +119,29 @@ def ensure_configured_impl(
     console: Console,
     run_setup_wizard: Callable[[], BeepConfig],
 ) -> BeepConfig:
-    """Ensure configuration exists, running the setup wizard when needed."""
+    """Ensure configuration exists, running the setup wizard when needed.
+
+    Profile-aware: if a saved profile exists from the Simple Service Generator,
+    loads it and skips the setup wizard entirely.
+    """
     config = load_config()
 
+    # ── Profile-aware fast path ─────────────────────────────────────
+    # If a profile is already saved, skip the wizard entirely.
+    try:
+        from beep.profiles import has_saved_profile, load_active_profile
+        if has_saved_profile():
+            profile = load_active_profile()
+            if profile is not None:
+                # Apply profile to config if not already set
+                if not config.has_profile:
+                    from beep.profiles.startup import apply_profile_to_config
+                    config = apply_profile_to_config(profile)
+                return config
+    except ImportError:
+        pass  # Profiles module not available — fall through to old flow
+
+    # ── Environment-based fast path ─────────────────────────────────
     has_env_token = bool(os.environ.get("BEEP_API_TOKEN"))
     has_env_url = bool(os.environ.get("BEEP_SERVER_URL"))
     if has_env_token and has_env_url:

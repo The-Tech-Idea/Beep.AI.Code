@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from beep.api.client import BeepAPIClient
+from beep.api.endpoints import V1_RAG_COLLECTIONS, V1_RAG_QUERY
+from beep.api.response_envelope import unwrap_v1_envelope
 
 
 class RAGClient:
@@ -20,22 +22,23 @@ class RAGClient:
         max_results: int = 5,
     ) -> dict[str, Any]:
         """Query RAG collections."""
-        return await self._client._request(
+        raw = await self._client._request(
             "POST",
-            "/v1/rag/query",
+            V1_RAG_QUERY,
             json={
                 "query": query,
-                "collection_id": collection_id,
+                "collection_ids": [collection_id] if collection_id else None,
                 "max_results": max_results,
                 "return_citations": True,
                 "grounded_only": True,
             },
         )
+        return unwrap_v1_envelope(raw)
 
     async def list_collections(self) -> list[dict[str, Any]]:
         """List available RAG collections."""
-        result = await self._client._request("GET", "/v1/rag/collections")
-        return result.get("collections", [])
+        raw = await self._client._request("GET", V1_RAG_COLLECTIONS)
+        return unwrap_v1_envelope(raw).get("collections", [])
 
     async def augment_messages(
         self,

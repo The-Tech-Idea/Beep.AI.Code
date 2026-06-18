@@ -6,9 +6,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from beep.agent.bundle_contract import PortableAgentBundleManifest
+from beep.api.endpoints import V1_API_AGENTS_BUNDLES_IMPORT
 from beep.publishing.release_metadata import build_distribution_name, build_shared_release_metadata
 
-SERVER_DEPLOY_ENDPOINT = "/ai-middleware/api/agents/bundles/import"
+SERVER_DEPLOY_ENDPOINT = V1_API_AGENTS_BUNDLES_IMPORT
 _SERVER_RUNNER_KINDS = frozenset({"beep.ai.server", "enterprise_server", "server"})
 
 

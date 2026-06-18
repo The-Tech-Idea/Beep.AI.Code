@@ -179,12 +179,12 @@ But the bundle contract should remain explicitly versioned and independent so Be
 ### Required Beep.AI.Server Follow-On Work
 
 - completed in this slice: preserve export-friendly model metadata (`base_url`, `provider_options`) plus native-framework compatibility in the server-side agent-definition contract
-- completed in this slice: add token-auth portable bundle import/export endpoints under `/ai-middleware/api/agents/*`
+- completed in this slice: add token-auth portable bundle import/export endpoints under `/v1/api/agents/*` (migrated from `/ai-middleware/api/agents/*` in Phase 23)
 - completed in this slice: add explicit server-contract compatibility mapping and focused bundle-to-server interop tests/fixtures
 
 ### Required JavaScript SDK Follow-On Work
 
-- completed in this slice: extend `Beep.AI.SDK/JavaScript/src/client.ts` with typed bundle import/export helpers aligned to `/ai-middleware/api/agents/*`
+- completed in this slice: extend `Beep.AI.SDK/JavaScript/src/client.ts` with typed bundle import/export helpers aligned to `/v1/api/agents/*` (migrated from `/ai-middleware/api/agents/*` in Phase 23)
 - completed in this slice: add portable bundle interfaces to `Beep.AI.SDK/JavaScript/src/types.ts` so bundle lifecycle responses are first-class SDK types
 - completed in this slice: harden `Beep.AI.SDK/JavaScript/package.json` with an explicit export map, publish metadata, and TypeScript-based build/check scripts that do not reference missing Jest/ESLint tooling
 

@@ -28,7 +28,9 @@ def _read_fixture_text(path: Path) -> str:
 
 def _materialize_bundle_fixture(tmp_path: Path, *, hosted: bool = False) -> Path:
     payload = json.loads(
-        _bundle_fixture_path("code_reviewer_export.json").read_text(encoding="utf-8").replace(
+        _bundle_fixture_path("code_reviewer_export.json")
+        .read_text(encoding="utf-8")
+        .replace(
             "__CLI_VERSION__",
             CLI_VERSION,
         )
@@ -43,7 +45,9 @@ def _materialize_bundle_fixture(tmp_path: Path, *, hosted: bool = False) -> Path
 
 def test_import_agent_bundle_posts_expected_payload(mock_config: BeepConfig) -> None:
     client = BeepAPIClient(mock_config)
-    with patch.object(client, "_request", new=AsyncMock(return_value={"success": True})) as request_mock:
+    with patch.object(
+        client, "_request", new=AsyncMock(return_value={"success": True})
+    ) as request_mock:
         result = __import__("asyncio").run(
             client.import_agent_bundle({"agent_id": "portable-agent"}, overwrite=True)
         )
@@ -51,7 +55,7 @@ def test_import_agent_bundle_posts_expected_payload(mock_config: BeepConfig) -> 
     assert result == {"success": True}
     request_mock.assert_awaited_once_with(
         "POST",
-        "/ai-middleware/api/agents/bundles/import",
+        "/v1/api/agents/bundles/import",
         json={
             "bundle": {"agent_id": "portable-agent"},
             "overwrite": True,
@@ -63,7 +67,9 @@ def test_server_deployment_plan_matches_local_fixture(tmp_path: Path) -> None:
     from beep.agent.bundle_contract import PortableAgentBundleManifest
 
     bundle_path = _materialize_bundle_fixture(tmp_path)
-    manifest = PortableAgentBundleManifest.from_dict(json.loads(bundle_path.read_text(encoding="utf-8")))
+    manifest = PortableAgentBundleManifest.from_dict(
+        json.loads(bundle_path.read_text(encoding="utf-8"))
+    )
     plan = build_server_deployment_plan(
         manifest,
         server_url="http://localhost:8000",
@@ -86,7 +92,7 @@ def test_agent_deploy_command_dry_run_reports_server_plan(tmp_path: Path) -> Non
 
     assert result.exit_code == 0
     assert "Dry-run deploy plan" in (result.stdout or "")
-    assert "/ai-middleware/api/agents/bundles/import" in (result.stdout or "")
+    assert "/v1/api/agents/bundles/import" in (result.stdout or "")
     assert "beep-agent-code-reviewer-v1.0.0" in (result.stdout or "")
     assert "local_pc" in (result.stdout or "")
 
@@ -105,7 +111,9 @@ def test_agent_deploy_command_requires_api_token_for_live_deploy(tmp_path: Path)
     assert "api_token" in (result.stdout or "")
 
 
-def test_agent_deploy_command_calls_server_bundle_import_and_surfaces_result(tmp_path: Path) -> None:
+def test_agent_deploy_command_calls_server_bundle_import_and_surfaces_result(
+    tmp_path: Path,
+) -> None:
     bundle_path = _materialize_bundle_fixture(tmp_path, hosted=True)
     runner = CliRunner()
     fake_client = SimpleNamespace(

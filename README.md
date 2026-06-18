@@ -520,7 +520,7 @@ If your checkout path differs, use the absolute path to `completions/beep.bash` 
 │  Beep.AI.Code   │ ───────────────────► │   Beep.AI.Server     │
 │  (this CLI)     │   /v1/chat/completions│  OpenAI-compatible  │
 │                 │   + coding_assistant  │  + Coding Assistant   │
-│  Typer + Rich   │   /ai-middleware/...  │  + RAG / IAM          │
+│  Typer + Rich   │   /v1/api/*           │  + RAG / IAM          │
 │  httpx async    │   bootstrap           │                       │
 └────────┬────────┘                       └──────────────────────┘
          │
@@ -536,9 +536,11 @@ If your checkout path differs, use the absolute path to `completions/beep.bash` 
 | Health | `GET /api/health` |
 | Models / chat | `GET /v1/models`, `GET /v1/models/{id}`, `POST /v1/chat/completions` (streaming supported) |
 | Other LLM surfaces | `POST /v1/messages`, `POST /v1/responses`, `POST /v1/embeddings` (when enabled on the server) |
-| Coding Assistant | `POST /ai-middleware/api/coding-assistant/workspaces/bootstrap`, project bootstrap/sessions under `/ai-middleware/api/coding-assistant/projects/...`, `POST .../sessions/compact` |
+| Coding Assistant | `POST /v1/api/coding-assistant/workspaces/bootstrap`, project bootstrap/sessions under `/v1/api/coding-assistant/projects/...`, `POST /v1/api/coding-assistant/sessions/compact` |
 | RAG | `POST /v1/rag/query`, `GET /v1/rag/collections` |
-| Diagnostics | `GET /ai-middleware/api/tokens/check` |
+| Diagnostics | `GET /v1/api/tokens/check` |
+
+Session-auth **web** routes under `/coding-assistant/*` are **not** used by this CLI; keep automation on token-authenticated APIs.
 
 Session-auth **web** routes under `/coding-assistant/*` are **not** used by this CLI; keep automation on token-authenticated APIs.
 
@@ -569,11 +571,16 @@ User-level hook definitions live in **`~/.beepai/hooks.json`** (`beep/hooks/mana
 
 | Document | Purpose |
 |----------|---------|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Runtime layers, workspace cache vs sessions, boundaries for contributors |
-| [`MASTER-TODO-TRACKER.md`](MASTER-TODO-TRACKER.md) | Roadmap phases, checklists, verification |
-| [`docs/INDEX.md`](docs/INDEX.md) | Top-level engineering doc index |
-| [`docs/ENGINEERING_IMPLEMENTATION_GUIDELINES.md`](docs/ENGINEERING_IMPLEMENTATION_GUIDELINES.md) | Implementation standards |
-| [`AGENTS.md`](AGENTS.md) | Agent frameworks and service-design rules shared with the Beep.AI.Server ecosystem |
+| [`docs/INDEX.md`](docs/INDEX.md) | **Documentation hub** — start here |
+| [`docs/APP_OVERVIEW.md`](docs/APP_OVERVIEW.md) | Application purpose, architecture, trust model |
+| [`docs/CLI_AND_COMMANDS.md`](docs/CLI_AND_COMMANDS.md) | CLI and REPL command reference |
+| [`docs/SERVICES_REGISTRY.md`](docs/SERVICES_REGISTRY.md) | `AppService` and package map |
+| [`docs/ENHANCEMENT_PLAN.md`](docs/ENHANCEMENT_PLAN.md) | Master enhancement roadmap |
+| [`docs/features/`](docs/features/) | Per-feature enhancement plans (one per service area) |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Runtime layers, workspace cache vs sessions, boundaries |
+| [`MASTER-TODO-TRACKER.md`](MASTER-TODO-TRACKER.md) | Phased execution tracker (`.plans/` phases) |
+| [`docs/ENGINEERING_IMPLEMENTATION_GUIDELINES.md`](docs/ENGINEERING_IMPLEMENTATION_GUIDELINES.md) | Cross-cutting implementation standards |
+| [`AGENTS.md`](AGENTS.md) | Agent frameworks and service-design rules (ecosystem) |
 
 ---
 

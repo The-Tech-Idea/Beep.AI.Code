@@ -31,7 +31,9 @@ def _array(description: str, items: dict[str, Any], **extra: Any) -> dict[str, A
     return {"type": "array", "description": description, "items": items, **extra}
 
 
-def _object(description: str, properties: dict[str, Any] | None = None, **extra: Any) -> dict[str, Any]:
+def _object(
+    description: str, properties: dict[str, Any] | None = None, **extra: Any
+) -> dict[str, Any]:
     payload: dict[str, Any] = {"type": "object", "description": description}
     if properties is not None:
         payload["properties"] = properties
@@ -361,6 +363,253 @@ SEMBLE_TOOLS: tuple[MCPToolConfig, ...] = (
                 minimum=1,
                 maximum=20,
             ),
+        },
+    ),
+)
+
+
+GITHUB_TOOLS: tuple[MCPToolConfig, ...] = (
+    _tool(
+        "search_repositories",
+        "Search GitHub repositories by query.",
+        {
+            "query": _string("Search query string."),
+            "page": _integer("Page number for paginated results."),
+            "perPage": _integer("Results per page.", minimum=1, maximum=100),
+        },
+    ),
+    _tool(
+        "create_or_update_file",
+        "Create or update a file in a GitHub repository.",
+        {
+            "owner": _string("Repository owner."),
+            "repo": _string("Repository name."),
+            "path": _string("File path within the repository."),
+            "content": _string("Base64-encoded file content."),
+            "message": _string("Commit message."),
+            "branch": _string("Branch name."),
+            "sha": _string("Optional SHA of existing file for updates."),
+        },
+    ),
+    _tool(
+        "search_issues",
+        "Search issues and pull requests across GitHub.",
+        {
+            "query": _string("Issue search query."),
+            "page": _integer("Page number."),
+            "perPage": _integer("Results per page.", minimum=1, maximum=100),
+        },
+    ),
+    _tool(
+        "create_issue",
+        "Create a new issue in a GitHub repository.",
+        {
+            "owner": _string("Repository owner."),
+            "repo": _string("Repository name."),
+            "title": _string("Issue title."),
+            "body": _string("Issue description."),
+            "assignees": _array("Usernames to assign.", _string("GitHub username.")),
+            "labels": _array("Labels to apply.", _string("Label name.")),
+        },
+    ),
+    _tool(
+        "create_pull_request",
+        "Create a new pull request.",
+        {
+            "owner": _string("Repository owner."),
+            "repo": _string("Repository name."),
+            "title": _string("PR title."),
+            "body": _string("PR description."),
+            "head": _string("Source branch name."),
+            "base": _string("Target branch name."),
+            "draft": _boolean("Whether the PR is a draft."),
+        },
+    ),
+    _tool(
+        "get_file_contents",
+        "Get the contents of a file or directory from a GitHub repository.",
+        {
+            "owner": _string("Repository owner."),
+            "repo": _string("Repository name."),
+            "path": _string("File or directory path."),
+            "branch": _string("Branch name."),
+        },
+    ),
+    _tool(
+        "create_repository",
+        "Create a new GitHub repository.",
+        {
+            "name": _string("Repository name."),
+            "description": _string("Repository description."),
+            "private": _boolean("Whether the repository is private."),
+            "autoInit": _boolean("Initialize with README."),
+        },
+    ),
+)
+
+
+CONTEXT7_TOOLS: tuple[MCPToolConfig, ...] = (
+    _tool(
+        "resolve-library-id",
+        "Resolve a library name to a Context7-compatible library ID.",
+        {
+            "libraryName": _string("Library name to resolve."),
+        },
+    ),
+    _tool(
+        "get-library-docs",
+        "Retrieve up-to-date library documentation from Context7.",
+        {
+            "context7CompatibleLibraryID": _string("Context7-compatible library ID."),
+            "topic": _string("Documentation topic or question."),
+            "tokens": _integer("Maximum tokens to return.", minimum=100, maximum=10000),
+        },
+    ),
+)
+
+
+TAVILY_TOOLS: tuple[MCPToolConfig, ...] = (
+    _tool(
+        "tavily-search",
+        "Search the web using the Tavily Search API.",
+        {
+            "query": _string("Search query string."),
+            "search_depth": _string(
+                "Search depth: basic (faster) or advanced (more thorough).",
+                enum=["basic", "advanced"],
+            ),
+            "max_results": _integer("Maximum results.", minimum=1, maximum=20),
+            "include_answer": _boolean("Include a generated answer summary."),
+            "include_raw_content": _boolean("Include raw page content."),
+        },
+    ),
+    _tool(
+        "tavily-extract",
+        "Extract content from one or more web pages.",
+        {
+            "urls": _array("URLs to extract content from.", _string("Target URL.")),
+            "include_images": _boolean("Include inline images in extracted content."),
+        },
+    ),
+)
+
+
+POSTGRES_TOOLS: tuple[MCPToolConfig, ...] = (
+    _tool(
+        "query",
+        "Execute a read-only SQL query against the connected PostgreSQL database.",
+        {
+            "sql": _string("SQL query to execute (SELECT only)."),
+        },
+    ),
+    _tool(
+        "list-tables",
+        "List all tables in the connected PostgreSQL database.",
+        {},
+    ),
+    _tool(
+        "describe-table",
+        "Describe the schema of a specific table.",
+        {
+            "table_name": _string("Name of the table to describe."),
+        },
+    ),
+)
+
+
+SENTRY_TOOLS: tuple[MCPToolConfig, ...] = (
+    _tool(
+        "get_issue",
+        "Get details of a Sentry issue by ID or URL.",
+        {
+            "issue_id_or_url": _string("Sentry issue ID or full issue URL."),
+        },
+    ),
+    _tool(
+        "list_issues",
+        "List recent Sentry issues for a project.",
+        {
+            "project_slug": _string("Sentry project slug."),
+            "limit": _integer("Maximum issues to return.", minimum=1, maximum=100),
+        },
+    ),
+    _tool(
+        "get_event",
+        "Get details of a specific Sentry event.",
+        {
+            "event_id": _string("Sentry event ID."),
+        },
+    ),
+)
+
+
+FILESYSTEM_TOOLS: tuple[MCPToolConfig, ...] = (
+    _tool(
+        "read_file",
+        "Read the contents of a file.",
+        {
+            "path": _string("File path to read."),
+        },
+    ),
+    _tool(
+        "write_file",
+        "Write content to a file.",
+        {
+            "path": _string("File path to write to."),
+            "content": _string("File content."),
+        },
+    ),
+    _tool(
+        "list_directory",
+        "List contents of a directory.",
+        {
+            "path": _string("Directory path to list."),
+        },
+    ),
+    _tool(
+        "create_directory",
+        "Create a new directory.",
+        {
+            "path": _string("Directory path to create."),
+        },
+    ),
+    _tool(
+        "move_file",
+        "Move or rename a file or directory.",
+        {
+            "source": _string("Source path."),
+            "destination": _string("Destination path."),
+        },
+    ),
+    _tool(
+        "get_file_info",
+        "Get metadata about a file or directory.",
+        {
+            "path": _string("Path to inspect."),
+        },
+    ),
+)
+
+
+FETCH_TOOLS: tuple[MCPToolConfig, ...] = (
+    _tool(
+        "fetch",
+        "Fetch content from a URL and process into markdown.",
+        {
+            "url": _string("URL to fetch content from."),
+            "max_length": _integer(
+                "Maximum content length to return.", minimum=100, maximum=100000
+            ),
+            "start_index": _integer("Start index for content slicing."),
+            "raw": _boolean("Return raw HTML instead of markdown."),
+        },
+    ),
+    _tool(
+        "fetch_urls",
+        "Fetch content from multiple URLs.",
+        {
+            "urls": _array("URLs to fetch.", _string("Target URL.")),
+            "max_length": _integer("Maximum content length per URL.", minimum=100, maximum=100000),
         },
     ),
 )

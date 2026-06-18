@@ -2,31 +2,43 @@
 
 from __future__ import annotations
 
-import httpx
-
 from typing import Any
 
-from beep.agent.provider_builtin_beep import BeepBackendProvider
 from beep.agent.provider_builtin_anthropic import AnthropicBackendProvider
-from beep.agent.provider_builtin_openrouter import OpenRouterBackendProvider
+from beep.agent.provider_builtin_beep import BeepBackendProvider
+from beep.agent.provider_builtin_litellm import LiteLLMBackendProvider
 from beep.agent.provider_builtin_openai import (
     LMStudioBackendProvider,
     OllamaBackendProvider,
     OpenAIBackendProvider,
     OpenAICompatibleBackendProvider,
 )
-from beep.agent.provider_contracts import AgentBackendProvider, ProviderGuidance, ProviderProbeResult
+from beep.agent.provider_builtin_openrouter import OpenRouterBackendProvider
+from beep.agent.provider_contracts import (
+    AgentBackendProvider,
+    ProviderGuidance,
+    ProviderProbeResult,
+)
 from beep.agent.provider_registry import (
     describe_agent_provider_guidance as _describe_agent_provider_guidance,
+)
+from beep.agent.provider_registry import (
     get_agent_backend_provider as _get_agent_backend_provider,
+)
+from beep.agent.provider_registry import (
     is_agent_backend_configured as _is_agent_backend_configured,
+)
+from beep.agent.provider_registry import (
     list_agent_backend_providers as _list_agent_backend_providers,
+)
+from beep.agent.provider_registry import (
     list_available_agent_provider_guidance as _list_available_agent_provider_guidance,
+)
+from beep.agent.provider_registry import (
     probe_agent_backend_configuration as _probe_agent_backend_configuration,
 )
 from beep.config import BeepConfig
 from beep.plugins.registry import PluginRegistry
-
 
 _BUILTIN_AGENT_BACKEND_PROVIDERS: dict[str, AgentBackendProvider] = {
     provider.key: provider
@@ -38,6 +50,7 @@ _BUILTIN_AGENT_BACKEND_PROVIDERS: dict[str, AgentBackendProvider] = {
         OpenAICompatibleBackendProvider(),
         LMStudioBackendProvider(),
         OllamaBackendProvider(),
+        LiteLLMBackendProvider(),
     )
 }
 

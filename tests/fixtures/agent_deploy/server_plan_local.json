@@ -4,7 +4,7 @@
   "declared_runner_kinds": [
     "local"
   ],
-  "endpoint_path": "/ai-middleware/api/agents/bundles/import",
+  "endpoint_path": "/v1/api/agents/bundles/import",
   "expected_execution_target": "local_pc",
   "overwrite": false,
   "server_url": "http://localhost:8000",

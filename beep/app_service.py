@@ -75,6 +75,8 @@ class AppService:
         self._template_validator: Any | None = None
         self._rollback_manager: Any | None = None
         self._standards_reviewer: Any | None = None
+        self._integrations: Any | None = None
+        self._web_search: Any | None = None
 
     # ------------------------------------------------------------------
     # Properties
@@ -283,6 +285,24 @@ class AppService:
             self._standards_reviewer = StandardsReviewer()
         return self._standards_reviewer
 
+    @property
+    def integrations(self) -> Any:
+        """Return the singleton :class:`IntegrationsRegistry`."""
+        if self._integrations is None:
+            from beep.integrations.registry import IntegrationsRegistry
+
+            self._integrations = IntegrationsRegistry()
+        return self._integrations
+
+    @property
+    def web_search(self) -> Any:
+        """Return the singleton :class:`WebSearchService`."""
+        if self._web_search is None:
+            from beep.websearch.service import WebSearchService
+
+            self._web_search = WebSearchService()
+        return self._web_search
+
     # ------------------------------------------------------------------
     # Session manager (requires config, so it is exposed as a factory)
     # ------------------------------------------------------------------
@@ -331,6 +351,8 @@ class AppService:
         self._template_validator = None
         self._rollback_manager = None
         self._standards_reviewer = None
+        self._integrations = None
+        self._web_search = None
         for watcher in self._watchers.values():
             watcher.stop()
         self._watchers.clear()

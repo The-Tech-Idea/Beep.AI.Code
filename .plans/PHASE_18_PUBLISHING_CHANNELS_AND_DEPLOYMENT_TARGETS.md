@@ -204,7 +204,7 @@ Phase 18 is now complete:
 - the Python adapter now emits a deterministic `pyproject.toml`, package module, `README.md`, and embedded bundle resource for local inspection and later publish automation
 - `beep/publishing/release_container_support.py` now emits deterministic GitHub release metadata, release notes, checksum placeholders, container Dockerfiles, entrypoints, and wrapper READMEs from the same canonical bundle metadata
 - fixture-backed tests now pin the generated outputs and assert metadata parity across npm, Python, GitHub release, and container local wrappers
-- `beep agent deploy <bundle_file_or_id>` now supports a dry-run Beep.AI.Server deployment plan plus live registration through `/ai-middleware/api/agents/bundles/import`
+- `beep agent deploy <bundle_file_or_id>` now supports a dry-run Beep.AI.Server deployment plan plus live registration through `/v1/api/agents/bundles/import` (migrated from `/ai-middleware/api/agents/bundles/import` in Phase 23)
 - `beep/publishing/server_deploy_support.py` now makes the server-specific deployment metadata explicit by recording the endpoint path, declared runner kinds, expected execution target, and server-compatibility warnings in a reusable plan structure
 - `beep/api/client_agent_bundle_support.py` now exposes a typed `import_agent_bundle()` helper so the deployment command reuses the same explicit server contract rather than building ad hoc requests inline
 - focused deployment tests now pin a fixture-backed local deployment plan and validate the live deploy command against the existing bundle import API seam

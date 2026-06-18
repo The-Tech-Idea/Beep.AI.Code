@@ -3,11 +3,11 @@
 This repository is standards-first.
 
 - If a service implements an established standard protocol or API, its canonical surface must use that standard directly.
-- `ai_middleware` is for Beep-specific, non-standard, helper, bootstrap, orchestration, or compatibility APIs only.
-- Do not put canonical `MCP`, OpenAI-compatible, OAuth/OIDC discovery, or other standards-based surfaces under `ai_middleware` when a standards-compliant route exists.
+- Beep-specific, non-standard, helper, bootstrap, orchestration, or compatibility APIs live under `/v1/api/*`.
+- Do not put canonical `MCP`, OpenAI-compatible, OAuth/OIDC discovery, or other standards-based surfaces under non-standard paths when a standards-compliant route exists.
 - When a temporary compatibility seam is necessary, keep the standards-based route canonical and document the compatibility reason explicitly.
 - Keep website/session-auth routes separate from application-token routes.
-- Read [Beep.AI.Server/docs/ENGINEERING_IMPLEMENTATION_GUIDELINES.md](Beep.AI.Server/docs/ENGINEERING_IMPLEMENTATION_GUIDELINES.md) before structural changes.
+- Read [docs/ENGINEERING_IMPLEMENTATION_GUIDELINES.md](docs/ENGINEERING_IMPLEMENTATION_GUIDELINES.md) before structural changes.
 
 ## Clean Code And File Size Rules
 
@@ -24,7 +24,7 @@ All long-lived, stateful services must be singletons accessed through `AppServic
 - **Never** instantiate service classes directly outside `beep/app_service.py`.
 - Always use `from beep.app_service import get_app_service` and access services through the registry.
 - Example: `get_app_service().code_analysis.analyze_project(...)` not `CodeAnalysisService()`.
-- Services currently in AppService: `code_analysis`, `bookmarks`, `tasks`, `permissions`, `hooks`, `language_registry`, `template_registry`, `api_client`, `mcp_client`, `smart_context`, `auto_context`, `chat_context`, `tree_sitter_parser`, `python_jedi`, `semble_index`, `plugin_registry`, `template_validator`, `rollback`, `standards_reviewer`.
+- Services currently in AppService: `code_analysis`, `bookmarks`, `tasks`, `permissions`, `hooks`, `language_registry`, `template_registry`, `api_client`, `mcp_client`, `smart_context`, `auto_context`, `chat_context`, `tree_sitter_parser`, `python_jedi`, `semble_index`, `plugin_registry`, `template_validator`, `rollback`, `standards_reviewer`, `integrations`, `web_search`.
 - Keyed singletons (one per workspace/config): `watcher`, `api_client`, `mcp_client`, `smart_context`, `auto_context`, `chat_context`, `python_jedi`, `semble_index`, `plugin_registry`.
 - If you add a new service class, register it in `AppService` immediately.
 
