@@ -1,5 +1,6 @@
 # Beep.AI.Code Copilot Instructions
 
+- **No rewrite during refactor.** When extracting or splitting code, move as-is — never rewrite, drop imports, or restructure declarations. Carry over every import, module-level declaration, and docstring exactly.
 - Treat `.plans/README.md`, `.plans/PHASE_*.md`, and `MASTER-TODO-TRACKER.md` as the authoritative backlog for roadmap implementation.
 - Before broad implementation, refactor, or "continue" requests, read the phase index, the relevant phase file, and the master tracker, then continue from the next incomplete todo unless the user explicitly changes priority.
 - Prefer finishing the open items in phases already marked in progress before starting unrelated later planned phases unless blocked or redirected.

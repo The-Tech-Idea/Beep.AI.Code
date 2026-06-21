@@ -17,6 +17,20 @@ This repository is standards-first.
 - Treat roughly 300 lines as the split warning zone; do not wait until a file is already hard to review.
 - If an existing file is already near or above 500 lines, do not keep growing it. Extract the new or adjacent responsibility first.
 
+## No Rewrite During Refactor — Move Only, Never Modify
+
+**When extracting code to a new file or splitting a class into mixins, move code — do not rewrite it.**
+
+- **Copy-paste the exact code block** from the source file into the new file. Do not retype, reformat, restructure, or "clean up" the code during extraction.
+- **Carry over every import** the moved code needs. If the code uses `logging`, `Any`, `Dict`, `List`, `datetime`, `json`, etc., the new file must import those same names.
+- **Carry over module-level declarations** (singletons, constants, type aliases) that the moved code references.
+- **Never restructure docstrings, method signatures, or default argument values** during extraction.
+- **Never delete code just because you're moving it.** The source file should only lose the code that was moved — nothing more, nothing less.
+- **After extraction, compile-check both old and new files.** If either fails, fix the move — do not rewrite to work around the error.
+- **This applies to mixin extraction, helper extraction, module splitting, and any other code movement.**
+
+---
+
 ## Singleton Services Rule
 
 All long-lived, stateful services must be singletons accessed through `AppService`.
